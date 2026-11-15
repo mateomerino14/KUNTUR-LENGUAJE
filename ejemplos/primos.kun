@@ -2,7 +2,7 @@
 
 constante LIMITE = 50
 
-var esPrimo = []
+var esPrimo: lista de logico = []
 para i desde 0 hasta LIMITE {
     agregar(esPrimo, verdadero)
 }
@@ -19,7 +19,7 @@ mientras candidato * candidato <= LIMITE {
     candidato = candidato + 1
 }
 
-var primos = []
+var primos: lista de entero = []
 para i desde 2 hasta LIMITE {
     si esPrimo[i] {
         agregar(primos, i)

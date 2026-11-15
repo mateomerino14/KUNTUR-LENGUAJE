@@ -3,7 +3,7 @@
 var precios = [12.5, 3, 8, 20, 1.5]
 agregar(precios, 7)
 
-funcion ordenar(lista) {
+funcion ordenar(lista: lista de decimal) {
     var n = longitud(lista)
     para i desde 0 hasta n - 2 {
         para j desde 0 hasta n - i - 2 {
@@ -16,8 +16,8 @@ funcion ordenar(lista) {
     }
 }
 
-funcion sumar(lista) {
-    var total = 0
+funcion sumar(lista: lista de decimal): decimal {
+    var total = 0.0
     para i desde 0 hasta longitud(lista) - 1 {
         total = total + lista[i]
     }
