@@ -77,6 +77,59 @@ const comparePositions = (first: Diagnostic, second: Diagnostic): number => {
   return first.position.column - second.position.column;
 };
 
+// Indica si el bloque contiene un `romper` que sale de su propio ciclo
+const containsBreak = (statements: Statement[]): boolean => {
+  return statements.some((statement) => {
+    if (statement.kind === 'Break') {
+      return true;
+    }
+    if (statement.kind === 'Block') {
+      return containsBreak(statement.statements);
+    }
+    if (statement.kind === 'If') {
+      return containsBreakInIf(statement);
+    }
+    return false;
+  });
+};
+
+// Indica si alguna rama del `si` contiene un `romper`
+const containsBreakInIf = (statement: If): boolean => {
+  if (containsBreak(statement.thenBranch.statements)) {
+    return true;
+  }
+  if (statement.elseBranch === null) {
+    return false;
+  }
+  if (statement.elseBranch.kind === 'If') {
+    return containsBreakInIf(statement.elseBranch);
+  }
+  return containsBreak(statement.elseBranch.statements);
+};
+
+// Indica si la sentencia siempre termina en `retornar`, sin importar el camino
+const statementAlwaysReturns = (statement: Statement): boolean => {
+  switch (statement.kind) {
+    case 'Return':
+      return true;
+    case 'Block':
+      return alwaysReturns(statement.statements);
+    case 'If':
+      if (statement.elseBranch === null || !alwaysReturns(statement.thenBranch.statements)) {
+        return false;
+      }
+      return statementAlwaysReturns(statement.elseBranch);
+    case 'While':
+      // `mientras verdadero` sin `romper` solo puede salir retornando
+      return statement.condition.kind === 'BooleanLiteral' && statement.condition.value && !containsBreak(statement.body.statements);
+    default:
+      return false;
+  }
+};
+
+// Indica si una lista de sentencias siempre llega a un `retornar`
+const alwaysReturns = (statements: Statement[]): boolean => statements.some(statementAlwaysReturns);
+
 class Checker {
   private readonly diagnostics: Diagnostic[] = [];
   private readonly globals: Scope;
@@ -327,6 +380,12 @@ class Checker {
     this.functionContext = {name: declaration.name, returnType};
     this.checkStatements(declaration.body.statements, bodyScope);
     this.functionContext = enclosingContext;
+    if (returnType !== null && !alwaysReturns(declaration.body.statements)) {
+      this.report(
+        `La función \`${declaration.name}\` debe retornar ${describeType(returnType)}, pero puede terminar sin llegar a \`retornar\`. Revisa que cada camino, incluido el \`sino\`, retorne un valor.`,
+        declaration.position,
+      );
+    }
   }
 
   // Revisa que el valor retornado coincida con el tipo de retorno de la función

@@ -189,6 +189,21 @@ describe('funciones', () => {
     expect(onlyMessage('funcion f(): texto {\n  retornar\n}')).toBe('La función `f` debe retornar un texto; falta el valor después de `retornar`.');
   });
 
+  // Una función con tipo de retorno debe retornar en todos los caminos
+  test('exige retornar en todos los caminos', () => {
+    expect(onlyMessage('funcion signo(n: entero): texto {\n  si n > 0 {\n    retornar "positivo"\n  }\n}')).toBe(
+      'La función `signo` debe retornar un texto, pero puede terminar sin llegar a `retornar`. Revisa que cada camino, incluido el `sino`, retorne un valor.',
+    );
+    expectValid('funcion signo(n: entero): texto {\n  si n > 0 {\n    retornar "positivo"\n  }\n  sino si n < 0 {\n    retornar "negativo"\n  }\n  sino {\n    retornar "cero"\n  }\n}');
+    expectValid('funcion primero(l: lista de entero): entero {\n  mientras verdadero {\n    retornar l[0]\n  }\n}');
+    expect(messagesOf('funcion f(): entero {\n  mientras verdadero {\n    si verdadero {\n      romper\n    }\n  }\n}')).toHaveLength(1);
+  });
+
+  // Las funciones sin tipo de retorno pueden terminar sin retornar
+  test('no exige retornar en funciones sin tipo de retorno', () => {
+    expectValid('funcion saludar(nombre) {\n  si nombre == "" {\n    retornar\n  }\n  mostrar("Hola", nombre)\n}');
+  });
+
   // El resultado de una función con tipo de retorno se usa con ese tipo
   test('usa el tipo de retorno en quien llama', () => {
     expect(onlyMessage('funcion nombre(): texto {\n  retornar "Ana"\n}\nvar n: entero = nombre()')).toContain(
