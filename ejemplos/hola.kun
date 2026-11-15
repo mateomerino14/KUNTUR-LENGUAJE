@@ -1,0 +1,3 @@
+// Tu primer programa en Kuntur
+var nombre = "Cochabamba"
+mostrar("¡Hola, " + nombre + "!")

@@ -1,0 +1,28 @@
+// Números primos con la criba de Eratóstenes
+
+constante LIMITE = 50
+
+var esPrimo = []
+para i desde 0 hasta LIMITE {
+    agregar(esPrimo, verdadero)
+}
+esPrimo[0] = falso
+esPrimo[1] = falso
+
+var candidato = 2
+mientras candidato * candidato <= LIMITE {
+    si esPrimo[candidato] {
+        para multiplo desde candidato * candidato hasta LIMITE paso candidato {
+            esPrimo[multiplo] = falso
+        }
+    }
+    candidato = candidato + 1
+}
+
+var primos = []
+para i desde 2 hasta LIMITE {
+    si esPrimo[i] {
+        agregar(primos, i)
+    }
+}
+mostrar("Primos hasta", LIMITE, ":", primos)

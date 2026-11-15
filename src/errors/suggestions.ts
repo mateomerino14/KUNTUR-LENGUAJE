@@ -1,25 +1,33 @@
 const maxSuggestionDistance = 2;
 const minLengthForDistanceTwo = 5;
 
-// Calcula cuántas ediciones de un carácter separan dos palabras (distancia de Levenshtein)
+// Calcula cuántas ediciones separan dos palabras; intercambiar dos letras vecinas cuenta como una
 export const editDistance = (first: string, second: string): number => {
-  let previousRow = Array.from({length: second.length + 1}, (_, index) => index);
+  const rows: number[][] = [];
+  for (let i = 0; i <= first.length; i++) {
+    rows.push([i]);
+  }
+  for (let j = 1; j <= second.length; j++) {
+    rows[0][j] = j;
+  }
   for (let i = 1; i <= first.length; i++) {
-    const currentRow = [i];
     for (let j = 1; j <= second.length; j++) {
       let substitutionCost = 1;
       if (first[i - 1] === second[j - 1]) {
         substitutionCost = 0;
       }
-      currentRow[j] = Math.min(
-        previousRow[j] + 1,
-        currentRow[j - 1] + 1,
-        previousRow[j - 1] + substitutionCost,
+      rows[i][j] = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + substitutionCost,
       );
+      const isTransposition = i > 1 && j > 1 && first[i - 1] === second[j - 2] && first[i - 2] === second[j - 1];
+      if (isTransposition) {
+        rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 1);
+      }
     }
-    previousRow = currentRow;
   }
-  return previousRow[second.length];
+  return rows[first.length][second.length];
 };
 
 // Distancia máxima aceptada según el largo del nombre, para no sugerir palabras sin relación
