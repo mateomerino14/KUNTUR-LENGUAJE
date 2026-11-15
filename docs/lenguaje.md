@@ -215,8 +215,24 @@ Las posiciones empiezan en 0. Los textos también se leen por posición (`"hola"
 | `redondear(x)` | Redondea al entero más cercano |
 | `raiz(x)` | Raíz cuadrada |
 | `aleatorio(min, max)` | Entero al azar entre `min` y `max`, ambos incluidos |
+| `leer(pregunta)` | Muestra la pregunta y devuelve, como texto, la línea que se escribe |
 
 Sus nombres se pueden usar para variables propias (`var texto = "hola"`); en ese caso la variable tapa a la función dentro de su bloque.
+
+## Leer datos
+
+`leer` muestra una pregunta y espera una línea. Siempre devuelve un texto; para usarlo como número se convierte con `numero`:
+
+```
+var nombre = leer("¿Cómo te llamas? ")
+var edad = numero(leer("¿Cuántos años tienes? "))
+mostrar("Hola,", nombre + ". En 10 años tendrás", edad + 10)
+```
+
+- En la **terminal** se escribe cada respuesta y se presiona Enter. También se pueden pasar todas desde un archivo: `npm run kuntur ejemplos/promedio.kun < ejemplos/promedio.entrada`.
+- En el **playground**, las respuestas se escriben de antemano en el cuadro Entrada, una por línea: cada `leer` usa la siguiente. La salida muestra la conversación completa, con las respuestas resaltadas.
+- Si el programa pide más datos de los que hay, se detiene con un error en la línea del `leer`.
+- Para guardar el dato en un `entero`, hay que redondearlo: `redondear(numero(leer("...")))`.
 
 ## Palabras reservadas
 

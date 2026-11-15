@@ -78,6 +78,8 @@ Se compila todo programa cuyos tipos se conozcan antes de ejecutar. El compilado
 | Tipo de los elementos de las listas vacías | `var nombres: lista de texto = []` |
 | Valor inicial o tipo en cada variable | `var x: entero = 0` en lugar de `var x` |
 
+`leer` también se compila: llama a la función del anfitrión `read_line`, que pide la línea a la terminal o al cuadro de entrada del playground.
+
 Todavía no se compilan:
 
 - Funciones declaradas dentro de otras funciones o de bloques.
