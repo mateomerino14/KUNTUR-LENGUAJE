@@ -5,15 +5,34 @@ const keywords = new Set([
   'desde', 'hasta', 'paso', 'romper', 'continuar', 'y', 'o', 'no',
 ]);
 const atoms = new Set(['verdadero', 'falso', 'nulo']);
-const typeNames = new Set(['entero', 'decimal', 'texto', 'logico', 'lógico', 'lista', 'de']);
-const builtins = new Set(['mostrar', 'longitud', 'agregar', 'quitar', 'texto', 'numero', 'tipo', 'redondear', 'raiz', 'aleatorio', 'leer']);
+const typeNames = new Set(['entero', 'decimal', 'texto', 'logico', 'lógico', 'lista', 'diccionario', 'de']);
+const builtins = new Set(['mostrar', 'longitud', 'agregar', 'quitar', 'tiene', 'claves', 'texto', 'numero', 'tipo', 'redondear', 'raiz', 'aleatorio', 'leer']);
 
 interface KunturState {
   afterColon: boolean;
+  forEach: 'none' | 'afterFor' | 'afterEach';
 }
 
 // Indica qué estilo le corresponde a una palabra según su lugar en el código
 const wordStyle = (word: string, stream: StringStream, state: KunturState): string => {
+  const forEach = state.forEach;
+  state.forEach = 'none';
+  if (forEach === 'afterFor' && word === 'cada') {
+    state.forEach = 'afterEach';
+    return 'keyword';
+  }
+  if (forEach === 'afterEach' && word === 'en') {
+    return 'keyword';
+  }
+  if (forEach === 'afterEach') {
+    state.forEach = 'afterEach';
+  }
+  if (word === 'para') {
+    state.forEach = 'afterFor';
+  }
+  if (word === 'registro' && stream.match(/^\s+[\p{L}_]/u, false)) {
+    return 'keyword';
+  }
   if (keywords.has(word)) {
     state.afterColon = false;
     return 'keyword';
@@ -32,7 +51,7 @@ const wordStyle = (word: string, stream: StringStream, state: KunturState): stri
 
 export const kunturLanguage = StreamLanguage.define<KunturState>({
   name: 'kuntur',
-  startState: () => ({afterColon: false}),
+  startState: () => ({afterColon: false, forEach: 'none'}),
   token: (stream, state) => {
     if (stream.sol()) {
       state.afterColon = false;

@@ -7,7 +7,8 @@ import {
   reversedRandomMessage,
 } from '../errors/messages.js';
 import {RuntimeError} from './runtimeError.js';
-import {describeType, stringify, stringifyLiteral, typeName, type NativeFunction, type Value} from './values.js';
+import {checkKey} from './indexing.js';
+import {describeType, isDict, stringify, stringifyLiteral, typeName, type Dict, type NativeFunction, type Value} from './values.js';
 
 export type ReadLine = (prompt: string) => string | null;
 
@@ -66,7 +67,10 @@ const lengthFunction: NativeFunction = {
     if (Array.isArray(value) || typeof value === 'string') {
       return value.length;
     }
-    throw new RuntimeError(`\`longitud\` necesita una lista o un texto, pero recibió ${describeType(value)}.`, position);
+    if (isDict(value)) {
+      return value.size;
+    }
+    throw new RuntimeError(`\`longitud\` necesita una lista, un texto o un diccionario, pero recibió ${describeType(value)}.`, position);
   },
 };
 
@@ -91,6 +95,28 @@ const removeLastFunction: NativeFunction = {
     }
     return items.pop()!;
   },
+};
+
+// Exige que el argumento sea un diccionario
+const expectDict = (functionName: string, value: Value, position: Position): Dict => {
+  if (!isDict(value)) {
+    throw new RuntimeError(`\`${functionName}\` necesita un diccionario, pero recibió ${describeType(value)}.`, position);
+  }
+  return value;
+};
+
+const hasKeyFunction: NativeFunction = {
+  kind: 'native',
+  name: 'tiene',
+  arity: 2,
+  call: ([dict, key], position) => expectDict('tiene', dict, position).has(checkKey(key, position)),
+};
+
+const keysFunction: NativeFunction = {
+  kind: 'native',
+  name: 'claves',
+  arity: 1,
+  call: ([dict], position) => [...expectDict('claves', dict, position).keys()],
 };
 
 const toTextFunction: NativeFunction = {
@@ -180,6 +206,8 @@ export const createBuiltins = (options: BuiltinOptions): NativeFunction[] => [
   lengthFunction,
   appendFunction,
   removeLastFunction,
+  hasKeyFunction,
+  keysFunction,
   toTextFunction,
   toNumberFunction,
   typeFunction,

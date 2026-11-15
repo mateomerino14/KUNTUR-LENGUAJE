@@ -4,6 +4,7 @@ import {
   emptyListPopMessage,
   indexOutOfRangeMessage,
   invalidNumberMessage,
+  missingKeyMessage,
   negativeRootMessage,
   noMoreInputMessage,
   notDeclaredMessage,
@@ -34,6 +35,8 @@ export const TAGS = {
   text: 2,
   list: 3,
   boolean: 4,
+  dict: 5,
+  record: 6,
 } as const;
 
 export const TEXT_HEADER_SIZE = 8;
@@ -149,6 +152,7 @@ const failFunctions = (maxSteps: number): RuntimeFunction[] => [
     ),
     locals: [['$last', 'f64']],
   },
+  failFunction('fail_missing_key', [['$quoted', 'i32']], messagePieces(missingKeyMessage(marker(0)), [textArg('$quoted')])),
   failFunction('fail_invalid_number', [['$quoted', 'i32']], messagePieces(invalidNumberMessage(marker(0)), [textArg('$quoted')])),
   failFunction('fail_negative_root', [['$number', 'f64']], messagePieces(negativeRootMessage(marker(0)), [numberArg('$number')])),
   failFunction(
@@ -246,7 +250,9 @@ const coreFunctions: RuntimeFunction[] = [
   fn('length', '$obj i32', 'f64', '', `
     (if (result f64) (i32.eq (i32.load (local.get $obj)) (i32.const ${TAGS.text}))
       (then (f64.convert_i32_u (call $utf16_length (local.get $obj))))
-      (else (f64.convert_i32_u (i32.load offset=4 (local.get $obj)))))`),
+      (else (f64.convert_i32_u (i32.load offset=4 (call $list_view (local.get $obj))))))`),
+  fn('list_view', '$obj i32', 'i32', '', `
+    (select (i32.load offset=4 (local.get $obj)) (local.get $obj) (i32.eq (i32.load (local.get $obj)) (i32.const ${TAGS.dict})))`),
   fn('text_at', '$t i32, $index f64, $line i32, $column i32', 'i32', '$target i32, $pos i32, $unit i32, $size i32, $units i32, $result i32', `
     (local.set $target (call $check_index (local.get $index) (call $utf16_length (local.get $t)) (local.get $line) (local.get $column)))
     (block $found
@@ -316,6 +322,97 @@ const coreFunctions: RuntimeFunction[] = [
     (call $list_append_all (local.get $r) (local.get $b))
     (local.get $r)`),
 
+  // Diccionarios: una lista de claves y otra de valores, en el orden en que se agregaron
+  fn('dict_new', '', 'i32', '$d i32', `
+    (local.set $d (call $alloc (i32.const 16)))
+    (i32.store (local.get $d) (i32.const ${TAGS.dict}))
+    (i32.store offset=4 (local.get $d) (call $list_new))
+    (i32.store offset=8 (local.get $d) (call $list_new))
+    (local.get $d)`),
+  fn('dict_find', '$d i32, $key i32', 'i32', '$keys i32, $i i32', `
+    (local.set $keys (i32.load offset=4 (local.get $d)))
+    (block $done
+      (loop $next
+        (br_if $done (i32.ge_u (local.get $i) (i32.load offset=4 (local.get $keys))))
+        (if (i32.eqz (call $text_compare (call $list_item (local.get $keys) (local.get $i)) (local.get $key)))
+          (then (return (local.get $i))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $next)))
+    (i32.const -1)`),
+  fn('dict_get', '$d i32, $key i32, $line i32, $column i32', 'i32', '$i i32', `
+    (local.set $i (call $dict_find (local.get $d) (local.get $key)))
+    (if (i32.lt_s (local.get $i) (i32.const 0))
+      (then (call $fail_missing_key (call $json_quote (local.get $key)) (local.get $line) (local.get $column))))
+    (call $list_item (i32.load offset=8 (local.get $d)) (local.get $i))`),
+  fn('dict_set', '$d i32, $key i32, $value i32', '', '$i i32', `
+    (local.set $i (call $dict_find (local.get $d) (local.get $key)))
+    (if (i32.lt_s (local.get $i) (i32.const 0))
+      (then
+        (call $list_push (i32.load offset=4 (local.get $d)) (local.get $key))
+        (call $list_push (i32.load offset=8 (local.get $d)) (local.get $value))
+        (return)))
+    (i32.store
+      (i32.add (i32.load offset=12 (i32.load offset=8 (local.get $d))) (i32.shl (local.get $i) (i32.const 2)))
+      (local.get $value))`),
+  fn('dict_has', '$d i32, $key i32', 'i32', '', '(i32.ge_s (call $dict_find (local.get $d) (local.get $key)) (i32.const 0))'),
+  fn('dict_keys', '$d i32', 'i32', '$r i32', `
+    (local.set $r (call $list_new))
+    (call $list_append_all (local.get $r) (i32.load offset=4 (local.get $d)))
+    (local.get $r)`),
+  fn('dict_equal', '$a i32, $b i32', 'i32', '$keys i32, $i i32, $j i32', `
+    (local.set $keys (i32.load offset=4 (local.get $a)))
+    (if (i32.ne (i32.load offset=4 (local.get $keys)) (i32.load offset=4 (i32.load offset=4 (local.get $b))))
+      (then (return (i32.const 0))))
+    (block $done
+      (loop $next
+        (br_if $done (i32.ge_u (local.get $i) (i32.load offset=4 (local.get $keys))))
+        (local.set $j (call $dict_find (local.get $b) (call $list_item (local.get $keys) (local.get $i))))
+        (if (i32.lt_s (local.get $j) (i32.const 0)) (then (return (i32.const 0))))
+        (if (i32.eqz (call $values_equal
+              (call $list_item (i32.load offset=8 (local.get $a)) (local.get $i))
+              (call $list_item (i32.load offset=8 (local.get $b)) (local.get $j))))
+          (then (return (i32.const 0))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $next)))
+    (i32.const 1)`),
+  fn('dict_to_text', '$d i32', 'i32', '', `
+    (call $text_concat
+      (call $text_concat (text.const "{") (call $entries_to_text (local.get $d) (i32.const 1)))
+      (text.const "}"))`),
+  fn('entries_to_text', '$d i32, $quote i32', 'i32', '$keys i32, $parts i32, $i i32, $key i32', `
+    (local.set $keys (i32.load offset=4 (local.get $d)))
+    (local.set $parts (call $list_new))
+    (block $done
+      (loop $next
+        (br_if $done (i32.ge_u (local.get $i) (i32.load offset=4 (local.get $keys))))
+        (call $list_push (local.get $parts)
+          (call $text_concat
+            (call $text_concat
+              (select (call $json_quote (local.tee $key (call $list_item (local.get $keys) (local.get $i)))) (local.get $key) (local.get $quote))
+              (text.const ": "))
+            (call $stringify (call $list_item (i32.load offset=8 (local.get $d)) (local.get $i)) (i32.const 1))))
+        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+        (br $next)))
+    (call $join (local.get $parts) (text.const ", "))`),
+
+  // Registros: como un diccionario cuyas claves son los campos, más el nombre del registro
+  fn('record_new', '$name i32', 'i32', '$r i32', `
+    (local.set $r (call $alloc (i32.const 16)))
+    (i32.store (local.get $r) (i32.const ${TAGS.record}))
+    (i32.store offset=4 (local.get $r) (call $list_new))
+    (i32.store offset=8 (local.get $r) (call $list_new))
+    (i32.store offset=12 (local.get $r) (local.get $name))
+    (local.get $r)`),
+  fn('record_get', '$r i32, $field i32', 'i32', '', `
+    (call $list_item (i32.load offset=8 (local.get $r)) (call $dict_find (local.get $r) (local.get $field)))`),
+  fn('record_set', '$r i32, $field i32, $value i32', '', '', '(call $dict_set (local.get $r) (local.get $field) (local.get $value))'),
+  fn('record_to_text', '$r i32', 'i32', '', `
+    (call $text_concat
+      (call $text_concat
+        (call $text_concat (i32.load offset=12 (local.get $r)) (text.const "("))
+        (call $entries_to_text (local.get $r) (i32.const 0)))
+      (text.const ")"))`),
+
   // Cajas: los números van en un objeto propio y los valores lógicos son dos objetos fijos
   fn('box_number', '$x f64', 'i32', '$p i32', `
     (local.set $p (call $alloc (i32.const 16)))
@@ -337,6 +434,12 @@ const coreFunctions: RuntimeFunction[] = [
       (then (return (i32.eqz (call $text_compare (local.get $a) (local.get $b))))))
     (if (i32.eq (local.get $tag) (i32.const ${TAGS.boolean}))
       (then (return (i32.eq (i32.load offset=4 (local.get $a)) (i32.load offset=4 (local.get $b))))))
+    (if (i32.eq (local.get $tag) (i32.const ${TAGS.dict}))
+      (then (return (call $dict_equal (local.get $a) (local.get $b)))))
+    (if (i32.eq (local.get $tag) (i32.const ${TAGS.record}))
+      (then (return (i32.and
+        (i32.eqz (call $text_compare (i32.load offset=12 (local.get $a)) (i32.load offset=12 (local.get $b))))
+        (call $dict_equal (local.get $a) (local.get $b))))))
     (local.set $len (i32.load offset=4 (local.get $a)))
     (if (i32.ne (local.get $len) (i32.load offset=4 (local.get $b))) (then (return (i32.const 0))))
     (block $done
@@ -359,6 +462,10 @@ const coreFunctions: RuntimeFunction[] = [
       (then (return (call $number_to_text (f64.load offset=8 (local.get $obj))))))
     (if (i32.eq (local.get $tag) (i32.const ${TAGS.boolean}))
       (then (return (call $bool_to_text (i32.load offset=4 (local.get $obj))))))
+    (if (i32.eq (local.get $tag) (i32.const ${TAGS.dict}))
+      (then (return (call $dict_to_text (local.get $obj)))))
+    (if (i32.eq (local.get $tag) (i32.const ${TAGS.record}))
+      (then (return (call $record_to_text (local.get $obj)))))
     (local.set $parts (call $list_new))
     (block $done
       (loop $next

@@ -19,6 +19,7 @@ const singleCharTokens: ReadonlyMap<string, TokenType> = new Map([
   ['[', TokenType.LeftBracket],
   [']', TokenType.RightBracket],
   [',', TokenType.Comma],
+  ['.', TokenType.Dot],
   [':', TokenType.Colon],
   [';', TokenType.Semicolon],
 ]);

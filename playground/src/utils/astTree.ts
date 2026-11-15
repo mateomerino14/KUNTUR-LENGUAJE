@@ -119,6 +119,19 @@ class TreeBuilder {
         children.push(this.block('cuerpo', statement.body.statements, statement.body.position));
         return this.node(role, 'Para', statement.variable, statement.position, children);
       }
+      case 'ForEach':
+        return this.node(role, 'Para cada', statement.variable, statement.position, [
+          this.expression('recorre', statement.iterable),
+          this.block('cuerpo', statement.body.statements, statement.body.position),
+        ]);
+      case 'RecordDeclaration':
+        return this.node(
+          role,
+          'Registro',
+          `${statement.name}(${statement.fields.map((field) => `${field.name}${annotationText(field.typeAnnotation)}`).join(', ')})`,
+          statement.position,
+          [],
+        );
       case 'Break':
         return this.node(role, 'Romper', null, statement.position, []);
       case 'Continue':
@@ -153,6 +166,13 @@ class TreeBuilder {
         return make('Nulo', null, []);
       case 'ListLiteral':
         return make('Lista', null, expression.elements.map((element, index) => this.expression(`elemento ${index}`, element)));
+      case 'Field':
+        return make('Campo', expression.name, [this.expression('registro', expression.target)]);
+      case 'DictLiteral':
+        return make('Diccionario', null, expression.entries.flatMap((entry, index) => [
+          this.expression(`clave ${index}`, entry.key),
+          this.expression(`valor ${index}`, entry.value),
+        ]));
       case 'Variable':
         return make('Nombre', expression.name, []);
       case 'Unary':

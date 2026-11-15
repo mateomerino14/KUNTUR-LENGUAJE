@@ -1,9 +1,13 @@
+import {dictKeyMessage} from '../errors/messages.js';
 import {
+  booleanType,
   decimalType,
   describeType,
   integerType,
   isAssignable,
   isNumeric,
+  isTextLike,
+  listOf,
   isUnknown,
   nullType,
   textType,
@@ -37,6 +41,20 @@ const requireList = (name: string, type: Type, index: number, report: ArgumentRe
   }
 };
 
+// Exige que el argumento pueda ser un diccionario
+const requireDict = (name: string, type: Type, index: number, report: ArgumentReporter): void => {
+  if (type.kind !== 'dict' && !isUnknown(type)) {
+    report(index, `\`${name}\` necesita un diccionario, pero recibió ${describeType(type)}.`);
+  }
+};
+
+// Exige que la clave pueda ser un texto
+const requireKey = (type: Type, index: number, report: ArgumentReporter): void => {
+  if (!isTextLike(type)) {
+    report(index, dictKeyMessage(describeType(type)));
+  }
+};
+
 // Exige que el argumento pueda ser un entero
 const requireInteger = (name: string, type: Type, index: number, report: ArgumentReporter): void => {
   if (type.kind !== 'integer' && !isUnknown(type)) {
@@ -62,8 +80,8 @@ const signatures: BuiltinSignature[] = [
     name: 'longitud',
     arity: 1,
     check: ([value], report) => {
-      if (!isListLike(value) && value.kind !== 'text') {
-        report(0, `\`longitud\` necesita una lista o un texto, pero recibió ${describeType(value)}.`);
+      if (!isListLike(value) && value.kind !== 'text' && value.kind !== 'dict') {
+        report(0, `\`longitud\` necesita una lista, un texto o un diccionario, pero recibió ${describeType(value)}.`);
       }
       return integerType;
     },
@@ -86,6 +104,23 @@ const signatures: BuiltinSignature[] = [
     check: ([list], report) => {
       requireList('quitar', list, 0, report);
       return elementOf(list);
+    },
+  },
+  {
+    name: 'tiene',
+    arity: 2,
+    check: ([dict, key], report) => {
+      requireDict('tiene', dict, 0, report);
+      requireKey(key, 1, report);
+      return booleanType;
+    },
+  },
+  {
+    name: 'claves',
+    arity: 1,
+    check: ([dict], report) => {
+      requireDict('claves', dict, 0, report);
+      return listOf(textType);
     },
   },
   {

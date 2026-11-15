@@ -1,0 +1,22 @@
+// Precios de La Cancha guardados en un diccionario
+var precios = {
+    "papa": 6.5,
+    "cebolla": 4,
+    "locoto": 2.5,
+}
+precios["tomate"] = 5
+precios["papa"] = 7
+
+var compras = ["papa", "locoto", "tomate", "papa", "choclo"]
+var total = 0.0
+para cada producto en compras {
+    si tiene(precios, producto) {
+        total = total + precios[producto]
+        mostrar(producto, "cuesta", precios[producto])
+    }
+    sino {
+        mostrar("Hoy no hay", producto)
+    }
+}
+mostrar("Total a pagar:", total, "Bs")
+mostrar("Productos con precio:", claves(precios))
