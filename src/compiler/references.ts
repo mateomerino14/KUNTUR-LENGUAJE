@@ -81,6 +81,10 @@ const collectFromStatements = (statements: Statement[], names: Set<string>): voi
         });
         collectFromStatements(statement.body.statements, names);
         break;
+      case 'ForEach':
+        collectFromExpression(statement.iterable, names);
+        collectFromStatements(statement.body.statements, names);
+        break;
       case 'Block':
         collectFromStatements(statement.statements, names);
         break;

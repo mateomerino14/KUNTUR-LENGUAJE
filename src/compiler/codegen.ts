@@ -8,6 +8,7 @@ import type {
   Call,
   Expression,
   For,
+  ForEach,
   FunctionDeclaration,
   If,
   Index,
@@ -141,6 +142,7 @@ const containsValueReturn = (statements: Statement[]): boolean => {
         return containsValueReturn(statement.statements);
       case 'While':
       case 'For':
+      case 'ForEach':
         return containsValueReturn(statement.body.statements);
       case 'If':
         return containsValueReturnInIf(statement);
@@ -531,6 +533,9 @@ class CodeGenerator {
       case 'For':
         this.compileFor(statement, scope);
         return;
+      case 'ForEach':
+        this.compileForEach(statement, scope);
+        return;
       case 'Break':
         this.emit({op: 'br', depth: this.depthTo(this.state.loops.at(-1)!.breakLabel)});
         return;
@@ -683,6 +688,60 @@ class CodeGenerator {
       {op: 'f64.const', value: 1},
       op('f64.add'),
       {op: 'local.set', index: iteration},
+      {op: 'br', depth: this.depthTo(loopLabel)},
+    );
+    this.closeLabel();
+    this.closeLabel();
+  }
+
+  // Compila `para cada`: recorre por posición hasta el largo inicial, o antes si la lista se acorta, como el intérprete
+  private compileForEach(statement: ForEach, scope: CompileScope): void {
+    const elementType = this.types.loops.get(statement) ?? unknownType;
+    const valueType = valueTypeOf(elementType, this.refType);
+    if (valueType === null) {
+      this.report(
+        'Para compilar a WebAssembly, `para cada` necesita conocer el tipo de los elementos; anota la lista, por ejemplo: `lista de entero`.',
+        statement.iterable.position,
+      );
+      return;
+    }
+    const isText = this.typeOf(statement.iterable).kind === 'text';
+    const container = this.addLocal(`${statement.variable}_recorrido`, this.refType);
+    const total = this.addLocal(`${statement.variable}_total`, 'f64');
+    const index = this.addLocal(`${statement.variable}_posicion`, 'f64');
+    this.compileValue(statement.iterable, scope);
+    this.emit({op: 'local.tee', index: container});
+    this.callHost('length');
+    this.emit({op: 'local.set', index: total}, {op: 'f64.const', value: 0}, {op: 'local.set', index});
+    const loopScope = new CompileScope(scope);
+    const current = this.addLocal(statement.variable, valueType);
+    loopScope.define(statement.variable, {kind: 'variable', name: statement.variable, storage: 'local', index: current, valueType, declaredFlag: null});
+    const breakLabel = this.openLabel({op: 'block', result: null});
+    const loopLabel = this.openLabel({op: 'loop', result: null});
+    this.emit({op: 'local.get', index}, {op: 'local.get', index: total}, op('f64.ge'), {op: 'local.get', index}, {op: 'local.get', index: container});
+    this.callHost('length');
+    this.emit(op('f64.ge'), op('i32.or'), {op: 'br_if', depth: this.depthTo(breakLabel)});
+    this.emitTick(statement.position);
+    this.emit({op: 'local.get', index: container}, {op: 'local.get', index});
+    this.emitPosition(statement.iterable.position);
+    if (isText) {
+      this.callHost('text_at');
+    }
+    else {
+      this.callHost('list_get');
+      this.emitUnbox(elementType);
+    }
+    this.emit({op: 'local.set', index: current});
+    const continueLabel = this.openLabel({op: 'block', result: null});
+    this.state.loops.push({breakLabel, continueLabel});
+    this.compileStatements(statement.body.statements, new CompileScope(loopScope), false);
+    this.state.loops.pop();
+    this.closeLabel();
+    this.emit(
+      {op: 'local.get', index},
+      {op: 'f64.const', value: 1},
+      op('f64.add'),
+      {op: 'local.set', index},
       {op: 'br', depth: this.depthTo(loopLabel)},
     );
     this.closeLabel();
