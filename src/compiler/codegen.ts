@@ -7,6 +7,7 @@ import type {
   Binary,
   Call,
   Expression,
+  DictLiteral,
   For,
   ForEach,
   FunctionDeclaration,
@@ -87,6 +88,7 @@ const runtimeTypeNames: Readonly<Record<string, string>> = {
   text: 'texto',
   boolean: 'lógico',
   list: 'lista',
+  dict: 'diccionario',
 };
 
 const numericComparisons = {'<': 'f64.lt', '<=': 'f64.le', '>': 'f64.gt', '>=': 'f64.ge'} as const;
@@ -177,6 +179,7 @@ const valueTypeOf = (type: Type, referenceType: ValueType): ValueType | null => 
     case 'text':
       return referenceType;
     case 'list':
+    case 'dict':
       if (valueTypeOf(type.element, referenceType) === null) {
         return null;
       }
@@ -705,11 +708,15 @@ class CodeGenerator {
       );
       return;
     }
-    const isText = this.typeOf(statement.iterable).kind === 'text';
+    const iterableKind = this.typeOf(statement.iterable).kind;
+    const isText = iterableKind === 'text';
     const container = this.addLocal(`${statement.variable}_recorrido`, this.refType);
     const total = this.addLocal(`${statement.variable}_total`, 'f64');
     const index = this.addLocal(`${statement.variable}_posicion`, 'f64');
     this.compileValue(statement.iterable, scope);
+    if (iterableKind === 'dict') {
+      this.callHost('dict_keys');
+    }
     this.emit({op: 'local.tee', index: container});
     this.callHost('length');
     this.emit({op: 'local.set', index: total}, {op: 'f64.const', value: 0}, {op: 'local.set', index});
@@ -792,6 +799,8 @@ class CodeGenerator {
         return 'f64';
       case 'ListLiteral':
         return this.compileList(expression.elements, this.typeOf(expression), scope, expression.position);
+      case 'DictLiteral':
+        return this.compileDict(expression, scope);
       case 'Variable':
         return this.compileVariable(expression.name, scope, expression.position);
       case 'Assign':
@@ -834,6 +843,30 @@ class CodeGenerator {
       this.callHost('list_push');
     }
     this.emit({op: 'local.get', index: list});
+    return this.refType;
+  }
+
+  // Crea un diccionario vacío y le guarda cada clave con su valor
+  private compileDict(expression: DictLiteral, scope: CompileScope): ValueType {
+    const type = this.typeOf(expression);
+    if (type.kind !== 'dict' || valueTypeOf(type, this.refType) === null) {
+      this.report(
+        'Para compilar a WebAssembly, este diccionario necesita el tipo de sus valores; anota la variable, por ejemplo: `var edades: diccionario de entero = {}`.',
+        expression.position,
+      );
+      return this.refType;
+    }
+    const dict = this.addLocal('diccionario_nuevo', this.refType);
+    this.callHost('dict_new');
+    this.emit({op: 'local.set', index: dict});
+    for (const entry of expression.entries) {
+      this.emit({op: 'local.get', index: dict});
+      this.compileValue(entry.key, scope);
+      this.compileValue(entry.value, scope);
+      this.emitBox(this.typeOf(entry.value));
+      this.callHost('dict_set');
+    }
+    this.emit({op: 'local.get', index: dict});
     return this.refType;
   }
 
@@ -881,8 +914,13 @@ class CodeGenerator {
       this.compileValue(target.index, scope);
       this.emit({op: 'local.get', index: value});
       this.emitBox(this.typeOf(expression.value));
-      this.emitPosition(target.position);
-      this.callHost('list_set');
+      if (this.typeOf(target.target).kind === 'dict') {
+        this.callHost('dict_set');
+      }
+      else {
+        this.emitPosition(target.position);
+        this.callHost('list_set');
+      }
       this.emit({op: 'local.get', index: value});
       return valueType;
     }
@@ -1105,6 +1143,15 @@ class CodeGenerator {
         this.emitPosition(expression.position);
         this.callHost('list_pop');
         return this.emitUnbox(this.typeOf(expression));
+      case 'tiene':
+        this.compileValue(args[0], scope);
+        this.compileValue(args[1], scope);
+        this.callHost('dict_has');
+        return 'i32';
+      case 'claves':
+        this.compileValue(args[0], scope);
+        this.callHost('dict_keys');
+        return this.refType;
       case 'texto':
         this.compileValue(args[0], scope);
         this.emitAsText(this.typeOf(args[0]));
@@ -1160,6 +1207,10 @@ class CodeGenerator {
     if (containerType.kind === 'text') {
       this.callHost('text_at');
       return this.refType;
+    }
+    if (containerType.kind === 'dict') {
+      this.callHost('dict_get');
+      return this.emitUnbox(this.typeOf(expression));
     }
     this.callHost('list_get');
     return this.emitUnbox(this.typeOf(expression));

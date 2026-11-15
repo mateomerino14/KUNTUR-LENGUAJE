@@ -8,9 +8,9 @@ import {
   zeroStepMessage,
 } from '../errors/messages.js';
 import {createBuiltins, type ReadLine} from '../interpreter/builtins.js';
-import {checkIndex} from '../interpreter/indexing.js';
+import {checkIndex, readKey} from '../interpreter/indexing.js';
 import {RuntimeError} from '../interpreter/runtimeError.js';
-import {stringify, valuesEqual, type NativeFunction, type Value} from '../interpreter/values.js';
+import {stringify, valuesEqual, type Dict, type NativeFunction, type Value} from '../interpreter/values.js';
 import type {FunctionSignature} from './wasm/module.js';
 
 export const hostModuleName = 'kuntur';
@@ -39,6 +39,11 @@ export const hostSignatures = {
   list_set: {params: [ext, 'f64', ext, 'i32', 'i32'], results: []},
   list_pop: {params: [ext, 'i32', 'i32'], results: [ext]},
   list_concat: {params: [ext, ext], results: [ext]},
+  dict_new: {params: [], results: [ext]},
+  dict_get: {params: [ext, ext, 'i32', 'i32'], results: [ext]},
+  dict_set: {params: [ext, ext, ext], results: []},
+  dict_has: {params: [ext, ext], results: ['i32']},
+  dict_keys: {params: [ext], results: [ext]},
   box_number: {params: ['f64'], results: [ext]},
   unbox_number: {params: [ext], results: ['f64']},
   box_bool: {params: ['i32'], results: [ext]},
@@ -142,6 +147,13 @@ export const createHostFunctions = (options: HostOptions): Record<HostFunctionNa
     },
     list_pop: (list: Value[], line: number, column: number) => callBuiltin('quitar', [list], at(line, column)),
     list_concat: (left: Value[], right: Value[]) => [...left, ...right],
+    dict_new: () => new Map(),
+    dict_get: (dict: Dict, key: string, line: number, column: number) => readKey(dict, key, at(line, column)),
+    dict_set: (dict: Dict, key: string, value: Value) => {
+      dict.set(key, value);
+    },
+    dict_has: (dict: Dict, key: string) => toFlag(dict.has(key)),
+    dict_keys: (dict: Dict) => [...dict.keys()],
     box_number: (value: number) => value,
     unbox_number: (value: number) => value,
     box_bool: (value: number) => value !== 0,
