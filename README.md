@@ -16,7 +16,7 @@ para i desde 1 hasta 5 {
 ```
 
 ```
-Error de ejecución en la línea 4, columna 27:
+Error semántico en la línea 4, columna 27:
   4 | var mensaje = "Tienes " + edda + " años"
     |                           ^
 `edda` no existe. ¿Quisiste decir `edad`?
@@ -25,13 +25,14 @@ Error de ejecución en la línea 4, columna 27:
 ## Cómo funciona
 
 ```
-código fuente ──► analizador léxico ──► analizador sintáctico ──► intérprete
-                     (tokens)              (árbol de sintaxis)
+código fuente ──► analizador léxico ──► analizador sintáctico ──► análisis semántico ──► intérprete
+                     (tokens)              (árbol de sintaxis)       (nombres y tipos)
 ```
 
 1. **Analizador léxico** (`src/lexer`): corta el texto en tokens y decide dónde termina cada sentencia según los saltos de línea.
 2. **Analizador sintáctico** (`src/parser`): arma el árbol de sintaxis con un parser descendente recursivo y el método de Pratt para la precedencia de los operadores. Se recupera de los errores para informar varios en una sola pasada.
-3. **Intérprete** (`src/interpreter`): recorre el árbol y ejecuta el programa, con ámbitos, clausuras y límites contra ciclos infinitos.
+3. **Análisis semántico** (`src/checker`): revisa nombres y tipos antes de ejecutar. Deduce el tipo de las variables sin anotación y deja como desconocido lo que no se puede saber (tipado gradual).
+4. **Intérprete** (`src/interpreter`): recorre el árbol y ejecuta el programa, con ámbitos, clausuras y límites contra ciclos infinitos. Sus revisiones de tipos quedan como red de seguridad para los valores desconocidos.
 
 ## Requisitos
 
@@ -81,6 +82,6 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 | Fase | Contenido | Estado |
 |---|---|---|
 | 1 | Analizador léxico, analizador sintáctico e intérprete | Terminada |
-| 2 | Tipos (`entero`, `decimal`, `texto`, `logico`), análisis semántico y errores antes de ejecutar | Pendiente |
+| 2 | Tipos (`entero`, `decimal`, `texto`, `logico`, `lista de ...`), análisis semántico y errores antes de ejecutar | Terminada |
 | 3 | Generación de WebAssembly | Pendiente |
 | 4 | Playground web con visualización de tokens, árbol y ejecución paso a paso | Pendiente |

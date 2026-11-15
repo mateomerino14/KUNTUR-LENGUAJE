@@ -1,3 +1,4 @@
+import {checkProgram} from './checker/checker.js';
 import type {Diagnostic} from './errors/diagnostic.js';
 import {interpret} from './interpreter/interpreter.js';
 import {tokenize} from './lexer/lexer.js';
@@ -41,17 +42,30 @@ export const parse = (source: string): ParseSourceResult => {
   return {program: parsed.program, diagnostics: []};
 };
 
-// Analiza y ejecuta el código fuente, devolviendo lo mostrado y los errores
-export const run = (source: string, options: RunOptions = {}): RunResult => {
-  const output: string[] = [];
+// Analiza el código fuente y revisa sus nombres y tipos, sin ejecutarlo
+export const check = (source: string): ParseSourceResult => {
   const parsed = parse(source);
   if (parsed.program === null) {
-    return {output, diagnostics: parsed.diagnostics};
+    return parsed;
+  }
+  const checked = checkProgram(parsed.program);
+  if (checked.diagnostics.length > 0) {
+    return {program: null, diagnostics: checked.diagnostics};
+  }
+  return parsed;
+};
+
+// Analiza, revisa y ejecuta el código fuente, devolviendo lo mostrado y los errores
+export const run = (source: string, options: RunOptions = {}): RunResult => {
+  const output: string[] = [];
+  const checked = check(source);
+  if (checked.program === null) {
+    return {output, diagnostics: checked.diagnostics};
   }
   const write = (line: string): void => {
     output.push(line);
     options.write?.(line);
   };
-  const result = interpret(parsed.program, {write, maxSteps: options.maxSteps, random: options.random});
+  const result = interpret(checked.program, {write, maxSteps: options.maxSteps, random: options.random});
   return {output, diagnostics: result.diagnostics};
 };

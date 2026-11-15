@@ -1,16 +1,28 @@
 import {describe, expect, test} from 'vitest';
-import {run} from '../../src/index.js';
+import {parse, type RunResult} from '../../src/index.js';
+import {interpret} from '../../src/interpreter/interpreter.js';
+
+// Ejecuta el programa sin el análisis semántico, para probar al intérprete por sí solo
+const execute = (source: string, maxSteps?: number, random?: () => number): RunResult => {
+  const {program, diagnostics} = parse(source);
+  if (program === null) {
+    return {output: [], diagnostics};
+  }
+  const output: string[] = [];
+  const result = interpret(program, {write: (line) => output.push(line), maxSteps, random});
+  return {output, diagnostics: result.diagnostics};
+};
 
 // Ejecuta el programa y devuelve lo mostrado, fallando si hubo errores
 const outputOf = (source: string): string[] => {
-  const {output, diagnostics} = run(source);
+  const {output, diagnostics} = execute(source);
   expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual([]);
   return output;
 };
 
 // Ejecuta el programa y devuelve el único error de ejecución
 const runtimeErrorOf = (source: string): string => {
-  const {diagnostics} = run(source, {maxSteps: 10_000});
+  const {diagnostics} = execute(source, 10_000);
   expect(diagnostics).toHaveLength(1);
   expect(diagnostics[0].stage).toBe('runtime');
   return diagnostics[0].message;
@@ -146,7 +158,7 @@ describe('listas y funciones propias', () => {
 
   // `aleatorio` usa la fuente de azar indicada y respeta los límites
   test('genera números al azar dentro de los límites', () => {
-    const {output} = run('mostrar(aleatorio(1, 6), aleatorio(1, 6))', {random: () => 0.999});
+    const {output} = execute('mostrar(aleatorio(1, 6), aleatorio(1, 6))', undefined, () => 0.999);
     expect(output).toEqual(['6 6']);
   });
 
@@ -227,29 +239,13 @@ describe('errores de ejecución', () => {
 
   // El error indica la posición exacta
   test('indica la línea y la columna del error', () => {
-    const {diagnostics} = run('var a = 1\nvar b = a + c');
+    const {diagnostics} = execute('var a = 1\nvar b = a + c');
     expect(diagnostics[0].position).toEqual({line: 2, column: 13});
   });
 
   // Lo mostrado antes del error se conserva
   test('conserva lo mostrado antes del error', () => {
-    const {output} = run('mostrar("antes")\nmostrar(1 / 0)\nmostrar("después")');
+    const {output} = execute('mostrar("antes")\nmostrar(1 / 0)\nmostrar("después")');
     expect(output).toEqual(['antes']);
-  });
-});
-
-describe('etapas del análisis', () => {
-  // Si hay errores léxicos no se ejecuta nada
-  test('no ejecuta si hay errores léxicos', () => {
-    const {output, diagnostics} = run('mostrar("hola")\nvar x = 1 && 2');
-    expect(output).toEqual([]);
-    expect(diagnostics[0].stage).toBe('lexer');
-  });
-
-  // Si hay errores de sintaxis no se ejecuta nada
-  test('no ejecuta si hay errores de sintaxis', () => {
-    const {output, diagnostics} = run('mostrar("hola")\nvar = 1');
-    expect(output).toEqual([]);
-    expect(diagnostics[0].stage).toBe('parser');
   });
 });

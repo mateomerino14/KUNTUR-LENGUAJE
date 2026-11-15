@@ -1,4 +1,5 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
+import {arityMessage, readOnlyMessage, redeclarationMessage, undeclaredAssignmentMessage} from '../errors/messages.js';
 import {withSuggestion} from '../errors/suggestions.js';
 import type {
   Assign,
@@ -52,21 +53,6 @@ const arithmeticVerbs: Readonly<Record<string, string>> = {
   '*': 'multiplicar',
   '/': 'dividir',
   '%': 'calcular el residuo entre',
-};
-
-const assignmentErrors: Readonly<Record<string, (name: string) => string>> = {
-  constant: (name) => `\`${name}\` es una constante; su valor no se puede cambiar.`,
-  loop: (name) => `\`${name}\` es la variable del ciclo \`para\`; no se puede cambiar dentro del ciclo.`,
-  function: (name) => `\`${name}\` es una función; no se le puede asignar un valor.`,
-  native: (name) => `\`${name}\` es una función propia de Kuntur. Para usar ese nombre en una variable, decláralo con \`var ${name} = ...\`.`,
-};
-
-// Arma "1 valor" o "N valores" según la cantidad
-const countValues = (count: number): string => {
-  if (count === 1) {
-    return '1 valor';
-  }
-  return `${count} valores`;
 };
 
 class Interpreter {
@@ -178,7 +164,7 @@ class Interpreter {
   // Declara un nombre nuevo, evitando repetirlo en el mismo bloque
   private defineName(name: string, value: Value, kind: Binding['kind'], scope: Environment, position: Position): void {
     if (!scope.define(name, value, kind)) {
-      throw new RuntimeError(`Ya existe algo llamado \`${name}\` en este bloque; elige otro nombre.`, position);
+      throw new RuntimeError(redeclarationMessage(name), position);
     }
   }
 
@@ -302,14 +288,14 @@ class Interpreter {
     const binding = scope.lookup(target.name);
     if (binding === undefined) {
       const message = withSuggestion(
-        `\`${target.name}\` no existe. Para crearla escribe \`var ${target.name} = ...\`.`,
+        undeclaredAssignmentMessage(target.name),
         target.name,
         scope.visibleNames(),
       );
       throw new RuntimeError(message, target.position);
     }
     if (binding.kind !== 'variable') {
-      throw new RuntimeError(assignmentErrors[binding.kind](target.name), target.position);
+      throw new RuntimeError(readOnlyMessage(binding.kind, target.name), target.position);
     }
     binding.value = value;
     return value;
@@ -475,10 +461,7 @@ class Interpreter {
       expected = callee.declaration.params.length;
     }
     if (expected !== null && expected !== count) {
-      throw new RuntimeError(
-        `La función \`${name}\` espera ${countValues(expected)}, pero recibió ${countValues(count)}.`,
-        position,
-      );
+      throw new RuntimeError(arityMessage(name, expected, count), position);
     }
   }
 
