@@ -6,7 +6,7 @@ import {
   undeclaredAssignmentMessage,
   zeroStepMessage,
 } from '../errors/messages.js';
-import {createBuiltins} from '../interpreter/builtins.js';
+import {createBuiltins, type ReadLine} from '../interpreter/builtins.js';
 import {checkIndex} from '../interpreter/indexing.js';
 import {RuntimeError} from '../interpreter/runtimeError.js';
 import {stringify, valuesEqual, type NativeFunction, type Value} from '../interpreter/values.js';
@@ -43,6 +43,7 @@ export const hostSignatures = {
   box_bool: {params: ['i32'], results: [ext]},
   unbox_bool: {params: [ext], results: ['i32']},
   random_int: {params: ['f64', 'f64', 'i32', 'i32'], results: ['f64']},
+  read_line: {params: [ext, 'i32', 'i32'], results: [ext]},
   square_root: {params: ['f64', 'i32', 'i32'], results: ['f64']},
   fail_division_by_zero: {params: ['i32', 'i32'], results: []},
   fail_zero_step: {params: ['i32', 'i32'], results: []},
@@ -57,6 +58,7 @@ export type HostFunctionName = keyof typeof hostSignatures;
 export interface HostOptions {
   write: (line: string) => void;
   random: () => number;
+  read: ReadLine;
   maxSteps: number;
   memory: () => WebAssembly.Memory;
 }
@@ -79,7 +81,7 @@ const toFlag = (value: boolean): number => {
 // Crea las funciones de JavaScript que importa el código compilado, con los mismos mensajes que el intérprete
 export const createHostFunctions = (options: HostOptions): Record<HostFunctionName, HostFunction> => {
   const builtins = new Map<string, NativeFunction>();
-  for (const builtin of createBuiltins({write: options.write, random: options.random})) {
+  for (const builtin of createBuiltins({write: options.write, random: options.random, read: options.read})) {
     builtins.set(builtin.name, builtin);
   }
   // Llama a una función propia del intérprete para reutilizar su comportamiento y sus errores
@@ -145,6 +147,7 @@ export const createHostFunctions = (options: HostOptions): Record<HostFunctionNa
     unbox_bool: (value: boolean) => toFlag(value),
     random_int: (min: number, max: number, line: number, column: number) => callBuiltin('aleatorio', [min, max], at(line, column)),
     square_root: (value: number, line: number, column: number) => callBuiltin('raiz', [value], at(line, column)),
+    read_line: (prompt: string, line: number, column: number) => callBuiltin('leer', [prompt], at(line, column)),
     fail_division_by_zero: (line: number, column: number) => {
       throw new RuntimeError(divisionByZeroMessage, at(line, column));
     },

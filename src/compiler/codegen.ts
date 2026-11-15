@@ -939,6 +939,11 @@ class CodeGenerator {
         this.emitPosition(expression.position);
         this.callHost('square_root');
         return 'f64';
+      case 'leer':
+        this.compileValue(args[0], scope);
+        this.emitPosition(expression.position);
+        this.callHost('read_line');
+        return 'externref';
       case 'aleatorio':
         this.compileValue(args[0], scope);
         this.compileValue(args[1], scope);

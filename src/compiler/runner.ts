@@ -1,5 +1,6 @@
 import {createDiagnostic, type Diagnostic} from '../errors/diagnostic.js';
 import {tooDeepMessage} from '../errors/messages.js';
+import {noInput, type ReadLine} from '../interpreter/builtins.js';
 import {defaultMaxSteps} from '../interpreter/interpreter.js';
 import {RuntimeError} from '../interpreter/runtimeError.js';
 import {mainFunctionName, memoryExportName} from './codegen.js';
@@ -9,6 +10,7 @@ export interface WasmRunOptions {
   write: (line: string) => void;
   maxSteps?: number;
   random?: () => number;
+  read?: ReadLine;
 }
 
 // Instancia el módulo con las funciones del anfitrión, ejecuta `principal` y convierte los errores en diagnósticos
@@ -17,6 +19,7 @@ export const runWasm = async (binary: Uint8Array<ArrayBuffer>, options: WasmRunO
   const host = createHostFunctions({
     write: options.write,
     random: options.random ?? Math.random,
+    read: options.read ?? noInput,
     maxSteps: options.maxSteps ?? defaultMaxSteps,
     memory: () => memory!,
   });
