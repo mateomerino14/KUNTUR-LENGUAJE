@@ -137,7 +137,6 @@ export const usePlayground = () => {
     stepLine,
     editorDiagnostics,
     exampleId: exampleIdFor(source),
-    customExampleId,
     selectExample,
     selectPosition,
     runProgram,
