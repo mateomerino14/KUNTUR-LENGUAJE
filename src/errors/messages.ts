@@ -78,3 +78,8 @@ export const reversedRandomMessage = (high: string, low: string): string => {
 
 // Explica que se leyó un nombre que todavía no existe
 export const notDeclaredMessage = (name: string): string => `\`${name}\` no existe.`;
+
+// Explica qué puede recorrer \`para cada\`
+export const forEachTargetMessage = (description: string): string => {
+  return `\`para cada\` recorre listas, textos o diccionarios, pero aquí hay ${description}.`;
+};

@@ -1,6 +1,7 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
 import {
   arityMessage,
+  forEachTargetMessage,
   readOnlyMessage,
   redeclarationMessage,
   undeclaredAssignmentMessage,
@@ -13,6 +14,7 @@ import type {
   Call,
   Expression,
   For,
+  ForEach,
   FunctionDeclaration,
   If,
   Index,
@@ -53,7 +55,7 @@ export interface TypeInfo {
   expressions: Map<Expression, Type>;
   declarations: Map<VarDeclaration, Type>;
   functions: Map<FunctionDeclaration, FunctionType>;
-  loops: Map<For, Type>;
+  loops: Map<For | ForEach, Type>;
 }
 
 export interface CheckResult {
@@ -215,6 +217,9 @@ class Checker {
         return;
       case 'For':
         this.checkFor(statement, scope);
+        return;
+      case 'ForEach':
+        this.checkForEach(statement, scope);
         return;
       case 'Break':
       case 'Continue':
@@ -467,6 +472,32 @@ class Checker {
       }
     }
     const variableType = boundTypes.reduce(numericResult);
+    this.types.loops.set(statement, variableType);
+    const loopScope = new Scope(scope);
+    loopScope.define({
+      name: statement.variable,
+      type: variableType,
+      kind: 'loop',
+      inferred: false,
+      builtin: null,
+      position: statement.position,
+    });
+    this.checkStatements(statement.body.statements, new Scope(loopScope));
+  }
+
+  // Revisa lo que recorre `para cada` y fija el tipo de su variable: el elemento de la lista o un carácter del texto
+  private checkForEach(statement: ForEach, scope: Scope): void {
+    const iterableType = this.typeOf(statement.iterable, scope);
+    let variableType: Type = unknownType;
+    if (iterableType.kind === 'list') {
+      variableType = iterableType.element;
+    }
+    else if (iterableType.kind === 'text') {
+      variableType = textType;
+    }
+    else if (!isUnknown(iterableType)) {
+      this.report(forEachTargetMessage(describeType(iterableType)), statement.iterable.position);
+    }
     this.types.loops.set(statement, variableType);
     const loopScope = new Scope(scope);
     loopScope.define({

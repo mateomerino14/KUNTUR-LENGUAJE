@@ -2,6 +2,7 @@ import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagno
 import {
   arityMessage,
   divisionByZeroMessage,
+  forEachTargetMessage,
   readOnlyMessage,
   redeclarationMessage,
   tooDeepMessage,
@@ -17,6 +18,7 @@ import type {
   Call,
   Expression,
   For,
+  ForEach,
   FunctionDeclaration,
   If,
   Index,
@@ -149,6 +151,8 @@ class Interpreter {
         return this.executeWhile(statement, scope);
       case 'For':
         return this.executeFor(statement, scope);
+      case 'ForEach':
+        return this.executeForEach(statement, scope);
       case 'Break':
         return breakSignal;
       case 'Continue':
@@ -218,6 +222,37 @@ class Interpreter {
         return signal;
       }
     }
+  }
+
+  // Recorre una lista o un texto por posición; si se acorta durante el ciclo, el ciclo termina antes
+  private executeForEach(statement: ForEach, scope: Environment): Signal {
+    const iterable = this.evaluate(statement.iterable, scope);
+    const items = this.iterationItems(iterable, statement.iterable.position);
+    const startLength = items.length();
+    for (let index = 0; index < startLength && index < items.length(); index++) {
+      this.tick(statement.position);
+      const loopScope = new Environment(scope);
+      this.defineName(statement.variable, items.at(index), 'loop', loopScope, statement.position);
+      const signal = this.executeStatements(statement.body.statements, new Environment(loopScope));
+      if (signal.kind === 'break') {
+        return normalSignal;
+      }
+      if (signal.kind === 'return') {
+        return signal;
+      }
+    }
+    return normalSignal;
+  }
+
+  // Lo que recorre `para cada`: los elementos de una lista o los caracteres de un texto
+  private iterationItems(iterable: Value, position: Position): {length: () => number; at: (index: number) => Value} {
+    if (Array.isArray(iterable)) {
+      return {length: () => iterable.length, at: (index) => iterable[index]};
+    }
+    if (typeof iterable === 'string') {
+      return {length: () => iterable.length, at: (index) => iterable[index]};
+    }
+    throw new RuntimeError(forEachTargetMessage(describeType(iterable)), position);
   }
 
   // Recorre los números del rango; sin `paso` avanza de uno en uno y para contar hacia abajo se usa un paso negativo
