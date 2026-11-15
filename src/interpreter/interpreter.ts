@@ -1,5 +1,14 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
-import {arityMessage, readOnlyMessage, redeclarationMessage, undeclaredAssignmentMessage} from '../errors/messages.js';
+import {
+  arityMessage,
+  divisionByZeroMessage,
+  readOnlyMessage,
+  redeclarationMessage,
+  tooDeepMessage,
+  tooManyStepsMessage,
+  undeclaredAssignmentMessage,
+  zeroStepMessage,
+} from '../errors/messages.js';
 import {withSuggestion} from '../errors/suggestions.js';
 import type {
   Assign,
@@ -20,6 +29,7 @@ import type {
 } from '../parser/ast.js';
 import {createBuiltins} from './builtins.js';
 import {Environment, type Binding} from './environment.js';
+import {checkIndex} from './indexing.js';
 import {RuntimeError} from './runtimeError.js';
 import {describeType, isCallable, stringify, valuesEqual, type Callable, type UserFunction, type Value} from './values.js';
 
@@ -89,7 +99,7 @@ class Interpreter {
       }
       // El motor de JavaScript se quedó sin pila antes de llegar al límite propio
       if (error instanceof RangeError) {
-        return {diagnostics: [createDiagnostic('runtime', this.tooDeepMessage(), this.lastCallPosition)]};
+        return {diagnostics: [createDiagnostic('runtime', tooDeepMessage(), this.lastCallPosition)]};
       }
       throw error;
     }
@@ -209,7 +219,7 @@ class Interpreter {
     if (statement.step !== null) {
       step = this.requireNumber(this.evaluate(statement.step, scope), '`paso`', statement.step.position);
       if (step === 0) {
-        throw new RuntimeError('El `paso` no puede ser cero: el ciclo nunca terminaría.', statement.step.position);
+        throw new RuntimeError(zeroStepMessage, statement.step.position);
       }
     }
     // Se calcula cada valor desde el inicio para no acumular errores de los decimales
@@ -282,7 +292,7 @@ class Interpreter {
       if (!Array.isArray(list)) {
         throw new RuntimeError(`Solo se puede asignar por posición en una lista, pero aquí hay ${describeType(list)}.`, target.position);
       }
-      list[this.checkIndex(index, list.length, target.position)] = value;
+      list[checkIndex(index, list.length, target.position)] = value;
       return value;
     }
     const binding = scope.lookup(target.name);
@@ -390,7 +400,7 @@ class Interpreter {
       );
     }
     if ((operator === '/' || operator === '%') && right === 0) {
-      throw new RuntimeError('No se puede dividir entre cero.', position);
+      throw new RuntimeError(divisionByZeroMessage, position);
     }
     switch (operator) {
       case '-':
@@ -470,7 +480,7 @@ class Interpreter {
     this.tick(position);
     this.lastCallPosition = position;
     if (this.callDepth >= this.maxCallDepth) {
-      throw new RuntimeError(this.tooDeepMessage(fn.declaration.name), position);
+      throw new RuntimeError(tooDeepMessage(fn.declaration.name), position);
     }
     this.callDepth++;
     try {
@@ -489,15 +499,6 @@ class Interpreter {
     }
   }
 
-  // Mensaje cuando hay demasiadas llamadas anidadas
-  private tooDeepMessage(name?: string): string {
-    let subject = 'una función';
-    if (name !== undefined) {
-      subject = `\`${name}\``;
-    }
-    return `Hay demasiadas llamadas anidadas a ${subject}. ¿Se llama a sí misma sin una condición que la detenga?`;
-  }
-
   // Lee el elemento de una lista o el carácter de un texto en una posición
   private evaluateIndex(expression: Index, scope: Environment): Value {
     const target = this.evaluate(expression.target, scope);
@@ -508,35 +509,7 @@ class Interpreter {
         expression.position,
       );
     }
-    return target[this.checkIndex(index, target.length, expression.position)];
-  }
-
-  // Verifica que la posición sea un entero dentro del rango y la devuelve
-  private checkIndex(index: Value, length: number, position: Position): number {
-    if (typeof index !== 'number' || !Number.isInteger(index)) {
-      throw new RuntimeError(
-        `La posición debe ser un número entero, pero aquí es ${describeType(index)}${this.showNumber(index)}.`,
-        position,
-      );
-    }
-    if (length === 0) {
-      throw new RuntimeError(`La posición ${index} no existe: no hay ningún elemento.`, position);
-    }
-    if (index < 0 || index >= length) {
-      throw new RuntimeError(
-        `La posición ${index} no existe: hay ${length} elementos, en las posiciones 0 a ${length - 1}.`,
-        position,
-      );
-    }
-    return index;
-  }
-
-  // Muestra el número entre paréntesis cuando ayuda a entender el error
-  private showNumber(value: Value): string {
-    if (typeof value === 'number') {
-      return ` (${value})`;
-    }
-    return '';
+    return target[checkIndex(index, target.length, expression.position)];
   }
 
   // Exige que la condición sea verdadero o falso
@@ -562,10 +535,7 @@ class Interpreter {
   private tick(position: Position): void {
     this.steps++;
     if (this.steps > this.maxSteps) {
-      throw new RuntimeError(
-        `El programa superó el límite de ${this.maxSteps} pasos. ¿Hay un ciclo que nunca termina?`,
-        position,
-      );
+      throw new RuntimeError(tooManyStepsMessage(this.maxSteps), position);
     }
   }
 }

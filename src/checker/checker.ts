@@ -1,5 +1,11 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
-import {arityMessage, readOnlyMessage, redeclarationMessage, undeclaredAssignmentMessage} from '../errors/messages.js';
+import {
+  arityMessage,
+  readOnlyMessage,
+  redeclarationMessage,
+  undeclaredAssignmentMessage,
+  zeroStepMessage,
+} from '../errors/messages.js';
 import {withSuggestion} from '../errors/suggestions.js';
 import type {
   Assign,
@@ -444,7 +450,7 @@ class Checker {
     if (statement.step !== null) {
       boundTypes.push(this.requireNumericBound(statement.step, 'paso', scope));
       if (this.isZeroLiteral(statement.step)) {
-        this.report('El `paso` no puede ser cero: el ciclo nunca terminaría.', statement.step.position);
+        this.report(zeroStepMessage, statement.step.position);
       }
     }
     const variableType = boundTypes.reduce(numericResult);
