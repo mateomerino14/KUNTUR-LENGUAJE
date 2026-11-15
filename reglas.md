@@ -97,7 +97,8 @@ src/
 ├── checker/        Revisión de nombres y tipos antes de ejecutar
 ├── interpreter/    Ejecución directa del AST
 ├── compiler/       Traducción a WebAssembly y funciones del anfitrión
-│   └── wasm/       Codificación binaria y de texto de los módulos
+│   ├── wasm/       Codificación binaria y de texto de los módulos, y el ensamblador
+│   └── wasi/       Runtime del WebAssembly independiente
 ├── errors/         Diagnósticos y sugerencias en español
 ├── index.ts        API pública: tokenize, parse, check, compile, run, runCompiled
 └── cli.ts          Ejecutable de línea de comandos
@@ -114,6 +115,7 @@ Cada etapa recibe la salida de la anterior y no conoce a las siguientes.
 - Dentro del intérprete los errores de ejecución viajan como excepción interna y se convierten en diagnóstico en `run`.
 - Los mensajes que comparten varias etapas viven en `src/errors/messages.ts`.
 - El código compilado usa las mismas funciones propias y mensajes que el intérprete, a través de las funciones del anfitrión.
+- El runtime de WASI arma sus mensajes con las funciones de `messages.ts`; ningún mensaje se copia a mano en WebAssembly.
 
 ### Mensajes de error
 

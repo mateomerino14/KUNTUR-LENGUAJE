@@ -2,10 +2,19 @@
 
 Además de interpretarlo, Kuntur puede traducir un programa a **WebAssembly**, el formato binario que ejecutan los navegadores y Node.js casi a la velocidad del código nativo. El compilador escribe el archivo `.wasm` byte por byte, sin bibliotecas externas, y también lo muestra en el formato de texto `.wat` para poder leerlo.
 
+Hay dos versiones del módulo:
+
+| Versión | Dónde corre | Textos y listas |
+|---|---|---|
+| Para el navegador | Dentro de JavaScript (playground, `--wasm`) | Viven en JavaScript (`externref`) |
+| Independiente (WASI) | En cualquier computadora con `wasmtime`, sin JavaScript | Viven en la memoria del propio módulo |
+
 ```bash
-npm run kuntur -- --wasm ejemplos/tipos.kun                 # Compila y ejecuta
+npm run kuntur -- --wasm ejemplos/tipos.kun                 # Versión para el navegador: compila y ejecuta
 npm run kuntur -- --wat ejemplos/hola.kun                   # Muestra el WebAssembly generado
-npm run kuntur -- --compilar ejemplos/tipos.kun tipos.wasm  # Guarda el binario
+npm run kuntur -- --wasi ejemplos/tipos.kun                 # Versión independiente: compila y ejecuta
+npm run kuntur -- --compilar ejemplos/tipos.kun tipos.wasm  # Guarda la versión independiente
+wasmtime tipos.wasm                                         # La ejecuta sin Node ni Kuntur
 ```
 
 ## Etapas
@@ -88,6 +97,49 @@ Todavía no se compilan:
 
 Estos programas se pueden seguir ejecutando con el intérprete.
 
+## Versión independiente (WASI)
+
+**WASI** es el estándar con el que WebAssembly habla con el sistema. La versión independiente solo importa cinco funciones de WASI: escribir (`fd_write`), leer (`fd_read`), saber si la entrada es una terminal (`fd_fdstat_get`), pedir bytes al azar (`random_get`) y terminar (`proc_exit`). Exporta `_start` y `memory`, como espera cualquier ejecutor.
+
+### El runtime
+
+Todo lo que en el navegador hace JavaScript lo hace una biblioteca escrita en WebAssembly (`src/compiler/wasi/runtime.ts`), con las **mismas funciones y firmas** que el anfitrión, cambiando las referencias por direcciones de memoria. Por eso el generador de código es el mismo para las dos versiones: solo cambia a quién llama.
+
+El runtime está escrito en el formato de texto anidado de WebAssembly, y un ensamblador propio (`src/compiler/wasm/assembler.ts`) lo convierte en instrucciones.
+
+### Los objetos en memoria
+
+Cada objeto empieza con una etiqueta que dice su tipo, así el runtime puede compararlos y mostrarlos sin conocer los tipos del programa:
+
+| Objeto | Diseño |
+|---|---|
+| Número | etiqueta 1, y el `f64` en el byte 8 |
+| Texto | etiqueta 2, largo en bytes y los bytes en UTF-8 |
+| Lista | etiqueta 3, largo, capacidad y dirección de sus elementos; cada elemento es la dirección de un objeto |
+| Lógico | etiqueta 4 y su valor; solo existen dos, fijos en memoria |
+
+Los textos escritos en el programa se guardan ya con su etiqueta en la sección de datos, así que no se copian al usarlos. La memoria se reserva hacia adelante y crece con `memory.grow`; no hay recolector de basura, así que nunca se libera mientras el programa corre.
+
+### Los mensajes de error
+
+Los errores se escriben en la salida de errores con el mismo formato que la línea de comandos, y el programa termina con código 1. Los mensajes no se copian a mano: el runtime los arma con las funciones de `src/errors/messages.ts`, las mismas del intérprete, pidiéndolos con marcas en lugar de sus partes variables.
+
+### Los decimales, igual que JavaScript
+
+JavaScript escribe cada número con la menor cantidad de cifras que, leídas de nuevo, dan el mismo valor (`0.1 + 0.2` es `0.30000000000000004`). Para lograrlo sin JavaScript, el runtime:
+
+1. Prueba con 1, 2, 3... hasta 17 cifras.
+2. Calcula las cifras con el producto exacto `a × 10^s` en **doble precisión**: un número como la suma de dos `f64`, con la técnica de Dekker, para no perder las cifras 16 y 17.
+3. Acepta la primera cantidad de cifras cuyo error es menor que la mitad de la distancia al número vecino. En un empate exacto, la acepta solo si el número es par, como hace la lectura de JavaScript.
+4. Escribe el resultado con las reglas de `Number.prototype.toString`: notación normal hasta 21 cifras y exponencial (`1e+21`, `1e-7`) fuera de ese rango.
+
+`numero()` hace el camino inverso con la misma doble precisión. Una prueba con 15 000 números de magnitudes muy distintas dio el mismo texto que JavaScript en todos.
+
+### Diferencias conocidas
+
+- `longitud` y las posiciones de un texto cuentan como JavaScript (los emojis ocupan dos), pero leer la segunda mitad de un emoji devuelve el emoji completo.
+- Sin recolector de basura, un programa que crea muchísimos textos puede quedarse sin memoria; entonces termina con un error propio.
+
 ## Rendimiento
 
 En una prueba con `fib(27)` y un ciclo de 3 millones de vueltas, el programa compilado tardó unos 50 ms y el intérprete unos 750 ms: alrededor de 15 veces más rápido, con la misma salida.
@@ -95,3 +147,5 @@ En una prueba con `fib(27)` y un ciclo de 3 millones de vueltas, el programa com
 ## Cómo se prueba
 
 Las pruebas de `tests/compiler/compiler.test.ts` ejecutan cada programa **en el intérprete y compilado**, y exigen que la salida y los errores sean idénticos. Cubren los ejemplos, las operaciones, los textos, las listas, los ciclos, las funciones y cada error de ejecución.
+
+`tests/compiler/wasi.test.ts` hace lo mismo con la versión independiente, ejecutándola con el WASI de Node: compara lo que se ve en la terminal, la salida de errores y el código de salida. Además, la versión independiente se probó con **wasmtime**, que no usa JavaScript, y su `.wat` es válido según `wabt`.
