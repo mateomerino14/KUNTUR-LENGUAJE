@@ -4,8 +4,14 @@ import {editDistance, suggestName, withSuggestion} from '../../src/errors/sugges
 // La distancia cuenta inserciones, borrados y reemplazos
 test('calcula la distancia entre dos palabras', () => {
   expect(editDistance('edad', 'edad')).toBe(0);
-  expect(editDistance('edda', 'edad')).toBe(2);
+  expect(editDistance('gato', 'pato')).toBe(1);
   expect(editDistance('mostar', 'mostrar')).toBe(1);
+});
+
+// Intercambiar dos letras vecinas cuenta como una sola edición
+test('cuenta el intercambio de letras vecinas como una edición', () => {
+  expect(editDistance('edda', 'edad')).toBe(1);
+  expect(suggestName('edda', ['edad', 'nombre'])).toBe('edad');
 });
 
 // Sugiere el nombre más parecido entre los disponibles
