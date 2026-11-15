@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import {readFileSync, writeFileSync} from 'node:fs';
 import {compile, formatDiagnostic, parse, run, runCompiled, tokenize, type Diagnostic} from './index.js';
+import {createStdinReader} from './stdinReader.js';
 
 const usage = [
   'Uso:',
@@ -62,7 +63,7 @@ const printTree = (source: string): void => {
 
 // Ejecuta el programa mostrando la salida a medida que se produce
 const runFile = (source: string): void => {
-  const {diagnostics} = run(source, {write: (line) => process.stdout.write(`${line}\n`)});
+  const {diagnostics} = run(source, {write: (line) => process.stdout.write(`${line}\n`), read: createStdinReader(process.stdout)});
   if (diagnostics.length > 0) {
     reportAndExit(diagnostics, source);
   }
@@ -70,7 +71,10 @@ const runFile = (source: string): void => {
 
 // Compila a WebAssembly y ejecuta el módulo, mostrando la salida a medida que se produce
 const runWasmFile = async (source: string): Promise<void> => {
-  const {diagnostics} = await runCompiled(source, {write: (line) => process.stdout.write(`${line}\n`)});
+  const {diagnostics} = await runCompiled(source, {
+    write: (line) => process.stdout.write(`${line}\n`),
+    read: createStdinReader(process.stdout),
+  });
   if (diagnostics.length > 0) {
     reportAndExit(diagnostics, source);
   }
