@@ -44,6 +44,7 @@ export enum TokenType {
   LeftBracket = 'LeftBracket',
   RightBracket = 'RightBracket',
   Comma = 'Comma',
+  Dot = 'Dot',
   Colon = 'Colon',
   Semicolon = 'Semicolon',
 

@@ -2,6 +2,8 @@ import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagno
 import {describeToken, TokenType, type Token} from '../lexer/token.js';
 import type {
   Block,
+  DictEntry,
+  RecordField,
   Expression,
   FunctionDeclaration,
   If,
@@ -30,7 +32,10 @@ const statementStarters: ReadonlySet<TokenType> = new Set([
   TokenType.Continue,
 ]);
 
-const listTypeName = 'lista';
+const containerTypeNames = new Set(['lista', 'diccionario']);
+const eachWord = 'cada';
+const recordWord = 'registro';
+const inWord = 'en';
 const listElementWord = 'de';
 
 const statementSeparators: ReadonlySet<TokenType> = new Set([TokenType.Newline, TokenType.Semicolon]);
@@ -109,6 +114,9 @@ class Parser {
       case TokenType.Else:
         throw this.error('`sino` debe ir justo después del bloque de un `si`.', token.position);
       default:
+        if (token.lexeme === recordWord && this.peekAt(1).type === TokenType.Identifier && this.peekAt(2).type === TokenType.LeftBrace) {
+          return this.parseRecordDeclaration();
+        }
         return this.parseExpressionStatement();
     }
   }
@@ -193,9 +201,11 @@ class Parser {
   private parseType(message: string): TypeAnnotation {
     const name = this.consume(TokenType.Identifier, message);
     let element: TypeAnnotation | null = null;
-    if (name.lexeme === listTypeName && this.peek().lexeme === listElementWord) {
+    if (containerTypeNames.has(name.lexeme) && this.peek().lexeme === listElementWord) {
       this.advance();
-      element = this.parseType('Después de `lista de` va el tipo de los elementos, por ejemplo: `lista de entero`.');
+      element = this.parseType(
+        `Después de \`${name.lexeme} de\` va el tipo de los elementos, por ejemplo: \`${name.lexeme} de entero\`.`,
+      );
     }
     return {name: name.lexeme, element, position: name.position};
   }
@@ -244,9 +254,18 @@ class Parser {
     return {kind: 'While', condition, body, position: keyword.position};
   }
 
-  // Analiza `para i desde inicio hasta fin paso salto { }`
+  // Analiza `para i desde inicio hasta fin paso salto { }` o `para cada elemento en lista { }`
   private parseFor(): Statement {
     const keyword = this.advance();
+    if (this.peek().lexeme === eachWord && this.peekAt(1).type === TokenType.Identifier) {
+      if (this.peekAt(2).lexeme === inWord) {
+        return this.parseForEach(keyword);
+      }
+      throw this.error(
+        `Para recorrer una lista escribe \`para cada ${this.peekAt(1).lexeme} en lista { }\`.`,
+        this.peekAt(2).position,
+      );
+    }
     const variable = this.consume(
       TokenType.Identifier,
       'Después de `para` va el nombre de la variable del ciclo, por ejemplo: `para i desde 1 hasta 10 { }`.',
@@ -261,6 +280,50 @@ class Parser {
     }
     const body = this.parseLoopBody('Se esperaba `{` para abrir el cuerpo del `para`.');
     return {kind: 'For', variable: variable.lexeme, start, end, step, body, position: keyword.position};
+  }
+
+  // Analiza `para cada elemento en lista { }`; `cada` y `en` solo son especiales en este lugar
+  private parseForEach(keyword: Token): Statement {
+    this.advance();
+    const variable = this.advance();
+    this.advance();
+    const iterable = this.parseExpression();
+    const body = this.parseLoopBody('Se esperaba `{` para abrir el cuerpo del `para cada`.');
+    return {kind: 'ForEach', variable: variable.lexeme, iterable, body, position: keyword.position};
+  }
+
+  // Analiza `registro Nombre { campo: tipo ... }`, con un campo por línea o separados por comas
+  private parseRecordDeclaration(): Statement {
+    const keyword = this.advance();
+    const name = this.advance();
+    const open = this.advance();
+    const fields: RecordField[] = [];
+    this.skipFieldSeparators();
+    while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+      const field = this.consumeFieldName('Cada campo del registro lleva su nombre y su tipo, por ejemplo: `nombre: texto`.');
+      this.consume(TokenType.Colon, `El campo \`${field.lexeme}\` necesita su tipo, por ejemplo: \`${field.lexeme}: texto\`.`);
+      const typeAnnotation = this.parseType('Después de `:` va el nombre de un tipo, por ejemplo: `entero`.');
+      fields.push({name: field.lexeme, typeAnnotation, position: field.position});
+      this.skipFieldSeparators();
+    }
+    this.consumeClosing(TokenType.RightBrace, '}', open);
+    return {kind: 'RecordDeclaration', name: name.lexeme, fields, position: keyword.position};
+  }
+
+  // Exige el nombre de un campo y aclara cuando se usó una palabra reservada
+  private consumeFieldName(message: string): Token {
+    const token = this.peek();
+    if (token.type !== TokenType.Identifier && /^\p{L}+$/u.test(token.lexeme)) {
+      throw this.error(`\`${token.lexeme}\` es una palabra reservada de Kuntur y no puede ser nombre de un campo.`, token.position);
+    }
+    return this.consume(TokenType.Identifier, message);
+  }
+
+  // Salta saltos de línea y comas entre los campos de un registro
+  private skipFieldSeparators(): void {
+    while (this.match(TokenType.Newline) || this.match(TokenType.Comma)) {
+      // Nada que hacer: solo se consumen
+    }
   }
 
   // Analiza el cuerpo de un ciclo, donde se permiten `romper` y `continuar`
@@ -364,6 +427,8 @@ class Parser {
         return this.parseGrouping();
       case TokenType.LeftBracket:
         return this.parseList();
+      case TokenType.LeftBrace:
+        return this.parseDictionary();
       case TokenType.Minus:
         this.advance();
         return {kind: 'Unary', operator: '-', operand: this.parseExpression(Precedence.Unary), position: token.position};
@@ -406,6 +471,10 @@ class Parser {
         return {kind: 'Call', callee: left, args: this.parseArguments(), position: left.position};
       case TokenType.LeftBracket:
         return this.parseIndex(left, operator);
+      case TokenType.Dot: {
+        const name = this.consumeFieldName('Después de `.` va el nombre de un campo, por ejemplo: `alumno.nombre`.');
+        return {kind: 'Field', target: left, name: name.lexeme, position: name.position};
+      }
       default:
         return {
           kind: 'Binary',
@@ -420,7 +489,7 @@ class Parser {
   // Analiza una asignación, que agrupa de derecha a izquierda
   private parseAssignment(target: Expression, operator: Token): Expression {
     const value = this.parseExpression(Precedence.Assignment);
-    if (target.kind !== 'Variable' && target.kind !== 'Index') {
+    if (target.kind !== 'Variable' && target.kind !== 'Index' && target.kind !== 'Field') {
       throw this.error('Solo se puede asignar a una variable o a una posición de una lista.', operator.position);
     }
     return {kind: 'Assign', target, value, position: operator.position};
@@ -446,6 +515,26 @@ class Parser {
     }
     this.consumeClosing(TokenType.RightBracket, ']', open);
     return {kind: 'ListLiteral', elements, position: open.position};
+  }
+
+  // Analiza un diccionario literal `{"clave": valor, ...}`, que puede ocupar varias líneas
+  private parseDictionary(): Expression {
+    const open = this.advance();
+    const entries: DictEntry[] = [];
+    this.skipNewlines();
+    while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+      const key = this.parseExpression();
+      this.consume(TokenType.Colon, 'En un diccionario, después de cada clave va `:` y su valor, por ejemplo: `{"Ana": 20}`.');
+      const value = this.parseExpression();
+      entries.push({key, value});
+      this.skipNewlines();
+      if (!this.match(TokenType.Comma)) {
+        break;
+      }
+      this.skipNewlines();
+    }
+    this.consumeClosing(TokenType.RightBrace, '}', open);
+    return {kind: 'DictLiteral', entries, position: open.position};
   }
 
   // Analiza los argumentos de una llamada; el paréntesis de apertura ya fue consumido
@@ -577,6 +666,11 @@ class Parser {
   // Devuelve el token actual sin consumirlo
   private peek(): Token {
     return this.tokens[this.current];
+  }
+
+  // Devuelve un token más adelante sin consumirlo; al pasar el final devuelve el fin del archivo
+  private peekAt(offset: number): Token {
+    return this.tokens[Math.min(this.current + offset, this.tokens.length - 1)];
   }
 
   // Devuelve el último token consumido

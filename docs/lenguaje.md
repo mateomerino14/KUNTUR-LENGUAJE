@@ -63,6 +63,8 @@ Kuntur revisa los tipos **antes de ejecutar**: si hay un error, el programa no l
 | Texto | `texto` | `""` |
 | Lógico | `logico` o `lógico` | `falso` |
 | Lista | `lista de entero`, `lista de lista de texto`... | `[]` |
+| Diccionario | `diccionario de entero`, `diccionario de lista de texto`... | `{}` |
+| Registro | El nombre del registro, por ejemplo `Alumno` | `Alumno("Ana", 85)` |
 
 ### Tipos anotados y deducidos
 
@@ -174,6 +176,18 @@ para i desde 10 hasta 0 paso -2 {
 - `para` incluye ambos límites.
 - Sin `paso`, avanza de uno en uno. Para contar hacia abajo hay que indicar un `paso` negativo; si el inicio es mayor que el fin y no hay paso, el ciclo no da ninguna vuelta.
 - La variable del `para` no se puede modificar dentro del ciclo.
+
+`para cada` recorre los elementos de una lista, los caracteres de un texto o las claves de un diccionario:
+
+```
+para cada nota en [70, 85, 40] {
+    mostrar(nota)
+}
+```
+
+- Recorre hasta el largo que tenía la lista al empezar: lo que se agrega durante el ciclo no se recorre, y si la lista se acorta, el ciclo termina antes.
+- La variable toma el tipo de los elementos y no se puede modificar.
+- `cada` y `en` solo son especiales justo después de `para`; en otros lugares se pueden usar como nombres.
 - `romper` sale del ciclo y `continuar` pasa a la siguiente vuelta.
 
 ## Funciones
@@ -201,14 +215,58 @@ mostrar(notas[0], longitud(notas))
 
 Las posiciones empiezan en 0. Los textos también se leen por posición (`"hola"[0]`), pero no se pueden modificar.
 
+## Diccionarios
+
+Un diccionario guarda valores por nombre. Las claves siempre son textos:
+
+```
+var edades = {"Ana": 20, "Luis": 18}
+edades["Eva"] = 22          // agrega una clave
+edades["Ana"] = 21          // cambia un valor
+mostrar(edades["Luis"], longitud(edades))
+mostrar(tiene(edades, "Juan"))   // falso
+para cada nombre en edades {
+    mostrar(nombre, edades[nombre])
+}
+```
+
+- Las claves se recorren y se muestran en el orden en que se agregaron.
+- Leer una clave que no existe es un error; para evitarlo se revisa antes con `tiene`.
+- Un diccionario vacío necesita su tipo: `var precios: diccionario de decimal = {}`.
+- Dos diccionarios son iguales si tienen las mismas claves con los mismos valores, sin importar el orden.
+
+## Registros
+
+Un registro agrupa datos con nombre propio, como una ficha:
+
+```
+registro Alumno {
+    nombre: texto
+    nota: entero
+}
+
+var a = Alumno("Ana", 85)
+a.nota = a.nota + 5
+mostrar(a.nombre, a.nota)   // Ana 90
+mostrar(a)                  // Alumno(nombre: "Ana", nota: 90)
+```
+
+- Se crea llamando al registro con un valor por campo, en el orden en que se declararon.
+- Cada campo tiene un tipo, y el registro es un tipo más: `lista de Alumno`, un parámetro `alumno: Alumno` o un campo de otro registro.
+- Se declaran en el programa principal, fuera de funciones y bloques, y se pueden usar antes de la línea donde se declaran.
+- Los campos también se pueden separar con comas en una sola línea: `registro Punto { x: decimal, y_: decimal }`.
+- `tipo(a)` devuelve el nombre del registro, `"Alumno"`.
+
 ## Funciones propias
 
 | Función | Descripción |
 |---|---|
 | `mostrar(a, b, ...)` | Muestra los valores en una línea, separados por un espacio |
-| `longitud(x)` | Cantidad de elementos de una lista o de caracteres de un texto |
+| `longitud(x)` | Cantidad de elementos de una lista, de caracteres de un texto o de claves de un diccionario |
 | `agregar(lista, valor)` | Agrega un valor al final de la lista |
 | `quitar(lista)` | Quita y devuelve el último elemento |
+| `tiene(diccionario, clave)` | Indica si el diccionario tiene la clave |
+| `claves(diccionario)` | Lista con las claves, en el orden en que se agregaron |
 | `texto(x)` | Convierte un valor en texto |
 | `numero(x)` | Convierte un texto como `"42"` en decimal |
 | `tipo(x)` | Devuelve el nombre del tipo al ejecutar: `"número"`, `"texto"`, `"lista"`... |
@@ -238,7 +296,9 @@ mostrar("Hola,", nombre + ". En 10 años tendrás", edad + 10)
 
 `var`, `constante`, `funcion` (o `función`), `retornar`, `si`, `sino`, `mientras`, `para`, `desde`, `hasta`, `paso`, `romper`, `continuar`, `verdadero`, `falso`, `nulo`, `y`, `o`, `no`.
 
-Como `y` y `o` son palabras reservadas, no se pueden usar como nombres de variables.
+Como `y` y `o` son palabras reservadas, no se pueden usar como nombres de variables ni de campos.
+
+`cada`, `en` y `registro` solo son especiales en su lugar (`para cada x en ...` y `registro Nombre { }`), así que también sirven como nombres.
 
 ## Mensajes de error
 

@@ -9,6 +9,15 @@ const collectFromExpression = (expression: Expression, names: Set<string>): void
     case 'ListLiteral':
       expression.elements.forEach((element) => collectFromExpression(element, names));
       return;
+    case 'Field':
+      collectFromExpression(expression.target, names);
+      return;
+    case 'DictLiteral':
+      expression.entries.forEach((entry) => {
+        collectFromExpression(entry.key, names);
+        collectFromExpression(entry.value, names);
+      });
+      return;
     case 'Assign':
       collectFromExpression(expression.target, names);
       collectFromExpression(expression.value, names);
@@ -79,6 +88,10 @@ const collectFromStatements = (statements: Statement[], names: Set<string>): voi
             collectFromExpression(bound, names);
           }
         });
+        collectFromStatements(statement.body.statements, names);
+        break;
+      case 'ForEach':
+        collectFromExpression(statement.iterable, names);
         collectFromStatements(statement.body.statements, names);
         break;
       case 'Block':

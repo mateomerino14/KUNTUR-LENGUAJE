@@ -40,6 +40,17 @@ export interface ListLiteral {
   position: Position;
 }
 
+export interface DictEntry {
+  key: Expression;
+  value: Expression;
+}
+
+export interface DictLiteral {
+  kind: 'DictLiteral';
+  entries: DictEntry[];
+  position: Position;
+}
+
 export interface Variable {
   kind: 'Variable';
   name: string;
@@ -83,9 +94,16 @@ export interface Index {
   position: Position;
 }
 
+export interface Field {
+  kind: 'Field';
+  target: Expression;
+  name: string;
+  position: Position;
+}
+
 export interface Assign {
   kind: 'Assign';
-  target: Variable | Index;
+  target: Variable | Index | Field;
   value: Expression;
   position: Position;
 }
@@ -96,6 +114,8 @@ export type Expression =
   | BooleanLiteral
   | NullLiteral
   | ListLiteral
+  | DictLiteral
+  | Field
   | Variable
   | Unary
   | Binary
@@ -159,6 +179,27 @@ export interface For {
   position: Position;
 }
 
+export interface ForEach {
+  kind: 'ForEach';
+  variable: string;
+  iterable: Expression;
+  body: Block;
+  position: Position;
+}
+
+export interface RecordField {
+  name: string;
+  typeAnnotation: TypeAnnotation;
+  position: Position;
+}
+
+export interface RecordDeclaration {
+  kind: 'RecordDeclaration';
+  name: string;
+  fields: RecordField[];
+  position: Position;
+}
+
 export interface Break {
   kind: 'Break';
   position: Position;
@@ -188,6 +229,8 @@ export type Statement =
   | If
   | While
   | For
+  | ForEach
+  | RecordDeclaration
   | Break
   | Continue
   | Block

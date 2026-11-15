@@ -1,5 +1,5 @@
 import type {TypeInfo} from '../checker/checker.js';
-import {unknownType, type FunctionType, type Type} from '../checker/types.js';
+import {unknownType, type FunctionType, type RecordType, type Type} from '../checker/types.js';
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
 import {defaultMaxCallDepth, defaultMaxSteps} from '../interpreter/interpreter.js';
 import type {
@@ -7,7 +7,9 @@ import type {
   Binary,
   Call,
   Expression,
+  DictLiteral,
   For,
+  ForEach,
   FunctionDeclaration,
   If,
   Index,
@@ -86,6 +88,7 @@ const runtimeTypeNames: Readonly<Record<string, string>> = {
   text: 'texto',
   boolean: 'lógico',
   list: 'lista',
+  dict: 'diccionario',
 };
 
 const numericComparisons = {'<': 'f64.lt', '<=': 'f64.le', '>': 'f64.gt', '>=': 'f64.ge'} as const;
@@ -141,6 +144,7 @@ const containsValueReturn = (statements: Statement[]): boolean => {
         return containsValueReturn(statement.statements);
       case 'While':
       case 'For':
+      case 'ForEach':
         return containsValueReturn(statement.body.statements);
       case 'If':
         return containsValueReturnInIf(statement);
@@ -174,7 +178,10 @@ const valueTypeOf = (type: Type, referenceType: ValueType): ValueType | null => 
       return 'i32';
     case 'text':
       return referenceType;
+    case 'record':
+      return referenceType;
     case 'list':
+    case 'dict':
       if (valueTypeOf(type.element, referenceType) === null) {
         return null;
       }
@@ -508,6 +515,8 @@ class CodeGenerator {
       case 'VarDeclaration':
         this.compileVarDeclaration(statement, scope, topLevel);
         return;
+      case 'RecordDeclaration':
+        return;
       case 'FunctionDeclaration':
         if (!topLevel) {
           this.report(
@@ -530,6 +539,9 @@ class CodeGenerator {
         return;
       case 'For':
         this.compileFor(statement, scope);
+        return;
+      case 'ForEach':
+        this.compileForEach(statement, scope);
         return;
       case 'Break':
         this.emit({op: 'br', depth: this.depthTo(this.state.loops.at(-1)!.breakLabel)});
@@ -689,6 +701,64 @@ class CodeGenerator {
     this.closeLabel();
   }
 
+  // Compila `para cada`: recorre por posición hasta el largo inicial, o antes si la lista se acorta, como el intérprete
+  private compileForEach(statement: ForEach, scope: CompileScope): void {
+    const elementType = this.types.loops.get(statement) ?? unknownType;
+    const valueType = valueTypeOf(elementType, this.refType);
+    if (valueType === null) {
+      this.report(
+        'Para compilar a WebAssembly, `para cada` necesita conocer el tipo de los elementos; anota la lista, por ejemplo: `lista de entero`.',
+        statement.iterable.position,
+      );
+      return;
+    }
+    const iterableKind = this.typeOf(statement.iterable).kind;
+    const isText = iterableKind === 'text';
+    const container = this.addLocal(`${statement.variable}_recorrido`, this.refType);
+    const total = this.addLocal(`${statement.variable}_total`, 'f64');
+    const index = this.addLocal(`${statement.variable}_posicion`, 'f64');
+    this.compileValue(statement.iterable, scope);
+    if (iterableKind === 'dict') {
+      this.callHost('dict_keys');
+    }
+    this.emit({op: 'local.tee', index: container});
+    this.callHost('length');
+    this.emit({op: 'local.set', index: total}, {op: 'f64.const', value: 0}, {op: 'local.set', index});
+    const loopScope = new CompileScope(scope);
+    const current = this.addLocal(statement.variable, valueType);
+    loopScope.define(statement.variable, {kind: 'variable', name: statement.variable, storage: 'local', index: current, valueType, declaredFlag: null});
+    const breakLabel = this.openLabel({op: 'block', result: null});
+    const loopLabel = this.openLabel({op: 'loop', result: null});
+    this.emit({op: 'local.get', index}, {op: 'local.get', index: total}, op('f64.ge'), {op: 'local.get', index}, {op: 'local.get', index: container});
+    this.callHost('length');
+    this.emit(op('f64.ge'), op('i32.or'), {op: 'br_if', depth: this.depthTo(breakLabel)});
+    this.emitTick(statement.position);
+    this.emit({op: 'local.get', index: container}, {op: 'local.get', index});
+    this.emitPosition(statement.iterable.position);
+    if (isText) {
+      this.callHost('text_at');
+    }
+    else {
+      this.callHost('list_get');
+      this.emitUnbox(elementType);
+    }
+    this.emit({op: 'local.set', index: current});
+    const continueLabel = this.openLabel({op: 'block', result: null});
+    this.state.loops.push({breakLabel, continueLabel});
+    this.compileStatements(statement.body.statements, new CompileScope(loopScope), false);
+    this.state.loops.pop();
+    this.closeLabel();
+    this.emit(
+      {op: 'local.get', index},
+      {op: 'f64.const', value: 1},
+      op('f64.add'),
+      {op: 'local.set', index},
+      {op: 'br', depth: this.depthTo(loopLabel)},
+    );
+    this.closeLabel();
+    this.closeLabel();
+  }
+
   // Deja en la pila si el ciclo ya pasó el final en una dirección: paso positivo y mayor, o negativo y menor
   private emitPastEnd(step: number, current: number, end: number, comparison: 'f64.gt' | 'f64.lt'): void {
     this.emit(
@@ -733,6 +803,13 @@ class CodeGenerator {
         return 'f64';
       case 'ListLiteral':
         return this.compileList(expression.elements, this.typeOf(expression), scope, expression.position);
+      case 'DictLiteral':
+        return this.compileDict(expression, scope);
+      case 'Field':
+        this.compileValue(expression.target, scope);
+        this.emitText(expression.name);
+        this.callHost('record_get');
+        return this.emitUnbox(this.typeOf(expression));
       case 'Variable':
         return this.compileVariable(expression.name, scope, expression.position);
       case 'Assign':
@@ -778,6 +855,30 @@ class CodeGenerator {
     return this.refType;
   }
 
+  // Crea un diccionario vacío y le guarda cada clave con su valor
+  private compileDict(expression: DictLiteral, scope: CompileScope): ValueType {
+    const type = this.typeOf(expression);
+    if (type.kind !== 'dict' || valueTypeOf(type, this.refType) === null) {
+      this.report(
+        'Para compilar a WebAssembly, este diccionario necesita el tipo de sus valores; anota la variable, por ejemplo: `var edades: diccionario de entero = {}`.',
+        expression.position,
+      );
+      return this.refType;
+    }
+    const dict = this.addLocal('diccionario_nuevo', this.refType);
+    this.callHost('dict_new');
+    this.emit({op: 'local.set', index: dict});
+    for (const entry of expression.entries) {
+      this.emit({op: 'local.get', index: dict});
+      this.compileValue(entry.key, scope);
+      this.compileValue(entry.value, scope);
+      this.emitBox(this.typeOf(entry.value));
+      this.callHost('dict_set');
+    }
+    this.emit({op: 'local.get', index: dict});
+    return this.refType;
+  }
+
   // Lee una variable local o global
   private compileVariable(name: string, scope: CompileScope, position: Position): ValueType {
     const binding = scope.lookup(name);
@@ -814,6 +915,18 @@ class CodeGenerator {
   // Asigna un valor y lo deja en la pila, porque la asignación también es una expresión
   private compileAssign(expression: Assign, scope: CompileScope): ValueType {
     const target = expression.target;
+    if (target.kind === 'Field') {
+      const valueType = this.compileValue(expression.value, scope);
+      const value = this.addLocal('valor_asignado', valueType);
+      this.emit({op: 'local.set', index: value});
+      this.compileValue(target.target, scope);
+      this.emitText(target.name);
+      this.emit({op: 'local.get', index: value});
+      this.emitBox(this.typeOf(target));
+      this.callHost('record_set');
+      this.emit({op: 'local.get', index: value});
+      return valueType;
+    }
     if (target.kind === 'Index') {
       const valueType = this.compileValue(expression.value, scope);
       const value = this.addLocal('valor_asignado', valueType);
@@ -822,8 +935,13 @@ class CodeGenerator {
       this.compileValue(target.index, scope);
       this.emit({op: 'local.get', index: value});
       this.emitBox(this.typeOf(expression.value));
-      this.emitPosition(target.position);
-      this.callHost('list_set');
+      if (this.typeOf(target.target).kind === 'dict') {
+        this.callHost('dict_set');
+      }
+      else {
+        this.emitPosition(target.position);
+        this.callHost('list_set');
+      }
       this.emit({op: 'local.get', index: value});
       return valueType;
     }
@@ -1002,6 +1120,10 @@ class CodeGenerator {
       this.report('Solo se pueden llamar funciones por su nombre al compilar a WebAssembly.', expression.position);
       return 'f64';
     }
+    const record = this.types.records.get(expression.callee.name);
+    if (record !== undefined && scope.lookup(expression.callee.name) === undefined) {
+      return this.compileRecordNew(record, expression, scope);
+    }
     const binding = scope.lookup(expression.callee.name);
     if (binding === undefined) {
       return this.compileBuiltinCall(expression.callee.name, expression, scope);
@@ -1017,6 +1139,23 @@ class CodeGenerator {
     this.callDefined(binding.index);
     this.callDefined(this.exitCallHelper);
     return binding.returns;
+  }
+
+  // Crea un registro con su nombre y guarda cada argumento en su campo
+  private compileRecordNew(record: RecordType, expression: Call, scope: CompileScope): ValueType {
+    const value = this.addLocal('registro_nuevo', this.refType);
+    this.emitText(record.name);
+    this.callHost('record_new');
+    this.emit({op: 'local.set', index: value});
+    record.fields.forEach((field, index) => {
+      this.emit({op: 'local.get', index: value});
+      this.emitText(field.name);
+      this.compileValue(expression.args[index], scope);
+      this.emitBox(field.type);
+      this.callHost('record_set');
+    });
+    this.emit({op: 'local.get', index: value});
+    return this.refType;
   }
 
   // Compila una llamada a una función propia del lenguaje
@@ -1046,6 +1185,15 @@ class CodeGenerator {
         this.emitPosition(expression.position);
         this.callHost('list_pop');
         return this.emitUnbox(this.typeOf(expression));
+      case 'tiene':
+        this.compileValue(args[0], scope);
+        this.compileValue(args[1], scope);
+        this.callHost('dict_has');
+        return 'i32';
+      case 'claves':
+        this.compileValue(args[0], scope);
+        this.callHost('dict_keys');
+        return this.refType;
       case 'texto':
         this.compileValue(args[0], scope);
         this.emitAsText(this.typeOf(args[0]));
@@ -1055,7 +1203,7 @@ class CodeGenerator {
       case 'tipo':
         this.compileValue(args[0], scope);
         this.emit(op('drop'));
-        this.emitText(runtimeTypeNames[this.typeOf(args[0]).kind]);
+        this.emitText(this.runtimeTypeName(this.typeOf(args[0])));
         return this.refType;
       case 'redondear':
         this.compileValue(args[0], scope);
@@ -1082,6 +1230,14 @@ class CodeGenerator {
     }
   }
 
+  // Nombre que devuelve `tipo()`: el del registro o el de la clase de valor
+  private runtimeTypeName(type: Type): string {
+    if (type.kind === 'record') {
+      return type.name;
+    }
+    return runtimeTypeNames[type.kind];
+  }
+
   // Convierte un texto en número; si ya es número lo deja igual
   private compileToNumber(arg: Expression, position: Position, scope: CompileScope): ValueType {
     this.compileValue(arg, scope);
@@ -1101,6 +1257,10 @@ class CodeGenerator {
     if (containerType.kind === 'text') {
       this.callHost('text_at');
       return this.refType;
+    }
+    if (containerType.kind === 'dict') {
+      this.callHost('dict_get');
+      return this.emitUnbox(this.typeOf(expression));
     }
     this.callHost('list_get');
     return this.emitUnbox(this.typeOf(expression));

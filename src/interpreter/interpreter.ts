@@ -2,6 +2,9 @@ import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagno
 import {
   arityMessage,
   divisionByZeroMessage,
+  forEachTargetMessage,
+  missingFieldMessage,
+  notRecordMessage,
   readOnlyMessage,
   redeclarationMessage,
   tooDeepMessage,
@@ -16,7 +19,10 @@ import type {
   BinaryOperator,
   Call,
   Expression,
+  DictLiteral,
+  Field,
   For,
+  ForEach,
   FunctionDeclaration,
   If,
   Index,
@@ -29,10 +35,10 @@ import type {
 } from '../parser/ast.js';
 import {createBuiltins, noInput, type ReadLine} from './builtins.js';
 import {Environment, type Binding} from './environment.js';
-import {checkIndex} from './indexing.js';
+import {checkIndex, checkKey, readKey} from './indexing.js';
 import {RuntimeError} from './runtimeError.js';
 import {programFrameName, takeSnapshot, type StepListener} from './trace.js';
-import {describeType, isCallable, stringify, valuesEqual, type Callable, type UserFunction, type Value} from './values.js';
+import {describeType, isCallable, isDict, isRecord, type NativeFunction, stringify, valuesEqual, type Callable, type Dict, type UserFunction, type Value} from './values.js';
 
 export interface InterpretOptions {
   write: (line: string) => void;
@@ -96,6 +102,7 @@ class Interpreter {
   // Ejecuta el programa y convierte los errores de ejecución en diagnósticos
   run(program: Program): InterpretResult {
     try {
+      this.declareRecords(program.statements);
       this.executeStatements(program.statements, this.globals);
       return {diagnostics: []};
     }
@@ -108,6 +115,23 @@ class Interpreter {
         return {diagnostics: [createDiagnostic('runtime', tooDeepMessage(), this.lastCallPosition)]};
       }
       throw error;
+    }
+  }
+
+  // Crea la función que arma cada registro, con un argumento por campo en el orden en que se declararon
+  private declareRecords(statements: Statement[]): void {
+    for (const statement of statements) {
+      if (statement.kind !== 'RecordDeclaration') {
+        continue;
+      }
+      const names = statement.fields.map((field) => field.name);
+      const constructor: NativeFunction = {
+        kind: 'native',
+        name: statement.name,
+        arity: names.length,
+        call: (args) => ({kind: 'record', name: statement.name, fields: new Map(names.map((name, index) => [name, args[index]]))}),
+      };
+      this.defineName(statement.name, constructor, 'function', this.globals, statement.position);
     }
   }
 
@@ -137,6 +161,7 @@ class Interpreter {
         this.executeVarDeclaration(statement, scope);
         return normalSignal;
       case 'FunctionDeclaration':
+      case 'RecordDeclaration':
         return normalSignal;
       case 'Return':
         if (statement.value === null) {
@@ -149,6 +174,8 @@ class Interpreter {
         return this.executeWhile(statement, scope);
       case 'For':
         return this.executeFor(statement, scope);
+      case 'ForEach':
+        return this.executeForEach(statement, scope);
       case 'Break':
         return breakSignal;
       case 'Continue':
@@ -220,6 +247,41 @@ class Interpreter {
     }
   }
 
+  // Recorre una lista o un texto por posición; si se acorta durante el ciclo, el ciclo termina antes
+  private executeForEach(statement: ForEach, scope: Environment): Signal {
+    const iterable = this.evaluate(statement.iterable, scope);
+    const items = this.iterationItems(iterable, statement.iterable.position);
+    const startLength = items.length();
+    for (let index = 0; index < startLength && index < items.length(); index++) {
+      this.tick(statement.position);
+      const loopScope = new Environment(scope);
+      this.defineName(statement.variable, items.at(index), 'loop', loopScope, statement.position);
+      const signal = this.executeStatements(statement.body.statements, new Environment(loopScope));
+      if (signal.kind === 'break') {
+        return normalSignal;
+      }
+      if (signal.kind === 'return') {
+        return signal;
+      }
+    }
+    return normalSignal;
+  }
+
+  // Lo que recorre `para cada`: los elementos de una lista o los caracteres de un texto
+  private iterationItems(iterable: Value, position: Position): {length: () => number; at: (index: number) => Value} {
+    if (Array.isArray(iterable)) {
+      return {length: () => iterable.length, at: (index) => iterable[index]};
+    }
+    if (typeof iterable === 'string') {
+      return {length: () => iterable.length, at: (index) => iterable[index]};
+    }
+    if (isDict(iterable)) {
+      const keys = [...iterable.keys()];
+      return {length: () => keys.length, at: (index) => keys[index]};
+    }
+    throw new RuntimeError(forEachTargetMessage(describeType(iterable)), position);
+  }
+
   // Recorre los números del rango; sin `paso` avanza de uno en uno y para contar hacia abajo se usa un paso negativo
   private executeFor(statement: For, scope: Environment): Signal {
     const start = this.requireNumber(this.evaluate(statement.start, scope), '`desde`', statement.start.position);
@@ -261,6 +323,10 @@ class Interpreter {
         return null;
       case 'ListLiteral':
         return expression.elements.map((element) => this.evaluate(element, scope));
+      case 'DictLiteral':
+        return this.evaluateDict(expression, scope);
+      case 'Field':
+        return this.fieldsOf(expression, scope).get(expression.name)!;
       case 'Variable':
         return this.resolve(expression.name, scope, expression.position).value;
       case 'Assign':
@@ -278,6 +344,29 @@ class Interpreter {
     }
   }
 
+  // Arma un diccionario en el orden escrito; una clave repetida se queda con el último valor
+  private evaluateDict(expression: DictLiteral, scope: Environment): Dict {
+    const dict: Dict = new Map();
+    for (const entry of expression.entries) {
+      const key = checkKey(this.evaluate(entry.key, scope), entry.key.position);
+      dict.set(key, this.evaluate(entry.value, scope));
+    }
+    return dict;
+  }
+
+  // Devuelve los campos del registro, verificando que tenga el campo pedido
+  private fieldsOf(expression: Field, scope: Environment): Map<string, Value> {
+    const target = this.evaluate(expression.target, scope);
+    if (!isRecord(target)) {
+      throw new RuntimeError(notRecordMessage(describeType(target)), expression.position);
+    }
+    if (!target.fields.has(expression.name)) {
+      const message = withSuggestion(missingFieldMessage(target.name, expression.name), expression.name, [...target.fields.keys()]);
+      throw new RuntimeError(message, expression.position);
+    }
+    return target.fields;
+  }
+
   // Busca un nombre y, si no existe, sugiere el más parecido
   private resolve(name: string, scope: Environment, position: Position): Binding {
     const binding = scope.lookup(name);
@@ -292,14 +381,22 @@ class Interpreter {
   private evaluateAssign(expression: Assign, scope: Environment): Value {
     const value = this.evaluate(expression.value, scope);
     const target = expression.target;
+    if (target.kind === 'Field') {
+      this.fieldsOf(target, scope).set(target.name, value);
+      return value;
+    }
     if (target.kind === 'Index') {
       const list = this.evaluate(target.target, scope);
       const index = this.evaluate(target.index, scope);
+      if (isDict(list)) {
+        list.set(checkKey(index, target.position), value);
+        return value;
+      }
       if (typeof list === 'string') {
         throw new RuntimeError('Los textos no se pueden modificar por posición; arma un texto nuevo.', target.position);
       }
       if (!Array.isArray(list)) {
-        throw new RuntimeError(`Solo se puede asignar por posición en una lista, pero aquí hay ${describeType(list)}.`, target.position);
+        throw new RuntimeError(`Solo se puede asignar por posición en una lista o por clave en un diccionario, pero aquí hay ${describeType(list)}.`, target.position);
       }
       list[checkIndex(index, list.length, target.position)] = value;
       return value;
@@ -514,9 +611,12 @@ class Interpreter {
   private evaluateIndex(expression: Index, scope: Environment): Value {
     const target = this.evaluate(expression.target, scope);
     const index = this.evaluate(expression.index, scope);
+    if (isDict(target)) {
+      return readKey(target, index, expression.position);
+    }
     if (!Array.isArray(target) && typeof target !== 'string') {
       throw new RuntimeError(
-        `Solo se puede acceder por posición a listas y textos, pero aquí hay ${describeType(target)}.`,
+        `Solo se puede acceder por posición a listas y textos, o por clave a diccionarios, pero aquí hay ${describeType(target)}.`,
         expression.position,
       );
     }

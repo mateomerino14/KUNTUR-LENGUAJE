@@ -1,7 +1,7 @@
 import type {Position} from '../errors/diagnostic.js';
-import {emptyIndexMessage, indexOutOfRangeMessage} from '../errors/messages.js';
+import {dictKeyMessage, emptyIndexMessage, indexOutOfRangeMessage, missingKeyMessage} from '../errors/messages.js';
 import {RuntimeError} from './runtimeError.js';
-import {describeType, type Value} from './values.js';
+import {describeType, type Dict, type Value} from './values.js';
 
 // Muestra el número entre paréntesis cuando ayuda a entender el error
 const showNumber = (value: Value): string => {
@@ -26,4 +26,21 @@ export const checkIndex = (index: Value, length: number, position: Position): nu
     throw new RuntimeError(indexOutOfRangeMessage(String(index), String(length), String(length - 1)), position);
   }
   return index;
+};
+
+// Verifica que la clave de un diccionario sea un texto y la devuelve
+export const checkKey = (key: Value, position: Position): string => {
+  if (typeof key !== 'string') {
+    throw new RuntimeError(dictKeyMessage(describeType(key)), position);
+  }
+  return key;
+};
+
+// Lee el valor de una clave y explica el error si el diccionario no la tiene
+export const readKey = (dict: Dict, key: Value, position: Position): Value => {
+  const text = checkKey(key, position);
+  if (!dict.has(text)) {
+    throw new RuntimeError(missingKeyMessage(JSON.stringify(text)), position);
+  }
+  return dict.get(text)!;
 };
