@@ -1,0 +1,16 @@
+// FizzBuzz en español: Chuño para múltiplos de 3, Charque para múltiplos de 5
+
+para i desde 1 hasta 20 {
+    si i % 15 == 0 {
+        mostrar("ChuñoCharque")
+    }
+    sino si i % 3 == 0 {
+        mostrar("Chuño")
+    }
+    sino si i % 5 == 0 {
+        mostrar("Charque")
+    }
+    sino {
+        mostrar(i)
+    }
+}

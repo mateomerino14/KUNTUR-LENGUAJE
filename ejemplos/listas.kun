@@ -1,0 +1,30 @@
+// Listas: recorrer, agregar y ordenar con el método de la burbuja
+
+var precios = [12.5, 3, 8, 20, 1.5]
+agregar(precios, 7)
+
+funcion ordenar(lista) {
+    var n = longitud(lista)
+    para i desde 0 hasta n - 2 {
+        para j desde 0 hasta n - i - 2 {
+            si lista[j] > lista[j + 1] {
+                var temporal = lista[j]
+                lista[j] = lista[j + 1]
+                lista[j + 1] = temporal
+            }
+        }
+    }
+}
+
+funcion sumar(lista) {
+    var total = 0
+    para i desde 0 hasta longitud(lista) - 1 {
+        total = total + lista[i]
+    }
+    retornar total
+}
+
+ordenar(precios)
+mostrar("Ordenados:", precios)
+mostrar("Total: Bs", sumar(precios))
+mostrar("El más caro:", precios[longitud(precios) - 1])
