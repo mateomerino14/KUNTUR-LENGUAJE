@@ -2,6 +2,7 @@ import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagno
 import {describeToken, TokenType, type Token} from '../lexer/token.js';
 import type {
   Block,
+  DictEntry,
   Expression,
   FunctionDeclaration,
   If,
@@ -30,7 +31,7 @@ const statementStarters: ReadonlySet<TokenType> = new Set([
   TokenType.Continue,
 ]);
 
-const listTypeName = 'lista';
+const containerTypeNames = new Set(['lista', 'diccionario']);
 const eachWord = 'cada';
 const inWord = 'en';
 const listElementWord = 'de';
@@ -195,9 +196,11 @@ class Parser {
   private parseType(message: string): TypeAnnotation {
     const name = this.consume(TokenType.Identifier, message);
     let element: TypeAnnotation | null = null;
-    if (name.lexeme === listTypeName && this.peek().lexeme === listElementWord) {
+    if (containerTypeNames.has(name.lexeme) && this.peek().lexeme === listElementWord) {
       this.advance();
-      element = this.parseType('Después de `lista de` va el tipo de los elementos, por ejemplo: `lista de entero`.');
+      element = this.parseType(
+        `Después de \`${name.lexeme} de\` va el tipo de los elementos, por ejemplo: \`${name.lexeme} de entero\`.`,
+      );
     }
     return {name: name.lexeme, element, position: name.position};
   }
@@ -385,6 +388,8 @@ class Parser {
         return this.parseGrouping();
       case TokenType.LeftBracket:
         return this.parseList();
+      case TokenType.LeftBrace:
+        return this.parseDictionary();
       case TokenType.Minus:
         this.advance();
         return {kind: 'Unary', operator: '-', operand: this.parseExpression(Precedence.Unary), position: token.position};
@@ -467,6 +472,26 @@ class Parser {
     }
     this.consumeClosing(TokenType.RightBracket, ']', open);
     return {kind: 'ListLiteral', elements, position: open.position};
+  }
+
+  // Analiza un diccionario literal `{"clave": valor, ...}`, que puede ocupar varias líneas
+  private parseDictionary(): Expression {
+    const open = this.advance();
+    const entries: DictEntry[] = [];
+    this.skipNewlines();
+    while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+      const key = this.parseExpression();
+      this.consume(TokenType.Colon, 'En un diccionario, después de cada clave va `:` y su valor, por ejemplo: `{"Ana": 20}`.');
+      const value = this.parseExpression();
+      entries.push({key, value});
+      this.skipNewlines();
+      if (!this.match(TokenType.Comma)) {
+        break;
+      }
+      this.skipNewlines();
+    }
+    this.consumeClosing(TokenType.RightBrace, '}', open);
+    return {kind: 'DictLiteral', entries, position: open.position};
   }
 
   // Analiza los argumentos de una llamada; el paréntesis de apertura ya fue consumido

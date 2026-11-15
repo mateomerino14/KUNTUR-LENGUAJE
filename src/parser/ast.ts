@@ -40,6 +40,17 @@ export interface ListLiteral {
   position: Position;
 }
 
+export interface DictEntry {
+  key: Expression;
+  value: Expression;
+}
+
+export interface DictLiteral {
+  kind: 'DictLiteral';
+  entries: DictEntry[];
+  position: Position;
+}
+
 export interface Variable {
   kind: 'Variable';
   name: string;
@@ -96,6 +107,7 @@ export type Expression =
   | BooleanLiteral
   | NullLiteral
   | ListLiteral
+  | DictLiteral
   | Variable
   | Unary
   | Binary

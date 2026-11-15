@@ -18,6 +18,8 @@ export const printExpression = (expression: Expression): string => {
       return expression.name;
     case 'ListLiteral':
       return `[${expression.elements.map(printExpression).join(' ')}]`;
+    case 'DictLiteral':
+      return `{${expression.entries.map((entry) => `${printExpression(entry.key)}: ${printExpression(entry.value)}`).join(' ')}}`;
     case 'Unary':
       return `(${expression.operator} ${printExpression(expression.operand)})`;
     case 'Binary':
