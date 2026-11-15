@@ -57,6 +57,7 @@ export interface Token {
   lexeme: string;
   literal: number | string | null;
   position: Position;
+  original?: string;
 }
 
 export const keywords: ReadonlyMap<string, TokenType> = new Map([
