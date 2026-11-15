@@ -33,6 +33,8 @@ export const redeclarationMessage = (name: string): string => {
   return `Ya existe algo llamado \`${name}\` en este bloque; elige otro nombre.`;
 };
 
+export const noMoreInputMessage = 'El programa pidió un dato con `leer`, pero ya no hay más datos de entrada.';
+
 export const divisionByZeroMessage = 'No se puede dividir entre cero.';
 
 export const zeroStepMessage = 'El `paso` no puede ser cero: el ciclo nunca terminaría.';

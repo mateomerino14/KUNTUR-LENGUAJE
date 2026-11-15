@@ -1,4 +1,10 @@
-const hashPrefix = '#codigo=';
+const sourceKey = 'codigo';
+const inputKey = 'entrada';
+
+export interface SharedProgram {
+  source: string;
+  input: string;
+}
 
 // Convierte el código en texto seguro para la dirección, pasando por UTF-8 para conservar tildes y eñes
 export const encodeSource = (source: string): string => {
@@ -19,15 +25,30 @@ export const decodeSource = (encoded: string): string | null => {
   }
 };
 
-// Lee el código del enlace actual
-export const sourceFromHash = (hash: string): string | null => {
-  if (!hash.startsWith(hashPrefix)) {
+// Lee el código y la entrada del enlace actual, o null si el enlace no trae un programa
+export const programFromHash = (hash: string): SharedProgram | null => {
+  const params = new URLSearchParams(hash.replace(/^#/, ''));
+  const encodedSource = params.get(sourceKey);
+  if (encodedSource === null) {
     return null;
   }
-  return decodeSource(hash.slice(hashPrefix.length));
+  const source = decodeSource(encodedSource);
+  if (source === null) {
+    return null;
+  }
+  const encodedInput = params.get(inputKey);
+  let input = '';
+  if (encodedInput !== null) {
+    input = decodeSource(encodedInput) ?? '';
+  }
+  return {source, input};
 };
 
-// Arma el enlace que abre el playground con el código indicado
-export const shareUrl = (location: Location, source: string): string => {
-  return `${location.origin}${location.pathname}${hashPrefix}${encodeSource(source)}`;
+// Arma el enlace que abre el playground con el código y la entrada indicados
+export const shareUrl = (location: Location, program: SharedProgram): string => {
+  let hash = `#${sourceKey}=${encodeSource(program.source)}`;
+  if (program.input !== '') {
+    hash += `&${inputKey}=${encodeSource(program.input)}`;
+  }
+  return `${location.origin}${location.pathname}${hash}`;
 };

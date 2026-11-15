@@ -72,6 +72,7 @@ npm install
 npm run kuntur ejemplos/factorial.kun            # Ejecuta un programa
 npm run kuntur -- --tokens ejemplos/hola.kun     # Muestra los tokens
 npm run kuntur -- --arbol ejemplos/hola.kun      # Muestra el árbol de sintaxis
+npm run kuntur ejemplos/promedio.kun             # Pide los datos con leer() y espera las respuestas
 npm run kuntur -- --wasm ejemplos/tipos.kun      # Compila a WebAssembly y ejecuta
 npm run kuntur -- --wat ejemplos/hola.kun        # Muestra el WebAssembly generado
 npm run kuntur -- --compilar ejemplos/tipos.kun tipos.wasm   # Guarda el binario
