@@ -33,6 +33,8 @@ En el playground se escribe código en Kuntur y se ve qué hace cada etapa del c
 
 Los errores se subrayan mientras se escribe y los programas se comparten con un enlace.
 
+Con el selector **Runasimi**, las palabras del lenguaje se escriben en quechua: `sichus`, `kaykama`, `rikuchiy`... Ver el [modo quechua](docs/quechua.md).
+
 La sección **Ejercicios** propone 11 problemas en tres niveles, con corrección automática: cada solución se prueba con casos visibles y ocultos, y el progreso queda guardado en el navegador. Ver [cómo funcionan](docs/ejercicios.md).
 
 ![Playground de Kuntur recorriendo un programa paso a paso](docs/playground.png)
@@ -79,6 +81,7 @@ npm run kuntur -- --wasm ejemplos/tipos.kun      # Compila a WebAssembly y ejecu
 npm run kuntur -- --wat ejemplos/hola.kun        # Muestra el WebAssembly generado
 npm run kuntur -- --wasi ejemplos/tipos.kun      # Compila a WebAssembly independiente y ejecuta
 npm run kuntur -- --compilar ejemplos/tipos.kun tipos.wasm   # Guarda el WebAssembly independiente
+npm run kuntur -- --runasimi programa.kun        # Ejecuta un programa escrito en quechua
 wasmtime tipos.wasm                              # Lo ejecuta sin Node ni Kuntur
 ```
 
@@ -106,6 +109,7 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 - [Referencia del lenguaje](docs/lenguaje.md)
 - [Compilación a WebAssembly](docs/webassembly.md)
 - [Ejercicios con corrección automática](docs/ejercicios.md)
+- [Modo quechua (runasimi)](docs/quechua.md)
 - [Estándares de desarrollo](reglas.md)
 - [Programas de ejemplo](ejemplos/)
 
@@ -120,5 +124,5 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 | 5 | Ejecutable `.wasm` independiente con WASI | Terminada |
 | 6 | Ejercicios con corrección automática | Terminada |
 | 7 | `para cada`, diccionarios y registros | Terminada |
-| 8 | Modo quechua | Pendiente |
+| 8 | Modo quechua | Terminada |
 | 9 | Extensión para VS Code | Pendiente |
