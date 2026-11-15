@@ -30,7 +30,7 @@ export type {ReadLine} from './interpreter/builtins.js';
 export type {TypeInfo} from './checker/checker.js';
 export type {Type} from './checker/types.js';
 export {typeToString} from './checker/types.js';
-export {LANGUAGES, localizeMessage, toQuechua} from './language/quechua.js';
+export {LANGUAGES, localizeMessage, QUECHUA_WORDS, toQuechua} from './language/quechua.js';
 export type {Language} from './language/quechua.js';
 export {translateSource} from './language/translate.js';
 
