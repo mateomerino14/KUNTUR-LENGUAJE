@@ -1,0 +1,76 @@
+@import 'tailwindcss';
+@import '@fontsource/atkinson-hyperlegible-next/400.css';
+@import '@fontsource/atkinson-hyperlegible-next/700.css';
+@import '@fontsource/atkinson-hyperlegible-mono/400.css';
+@import '@fontsource/atkinson-hyperlegible-mono/700.css';
+
+@theme {
+  --font-sans: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono', ui-monospace, monospace;
+
+  --color-salt: #f2f5f7;
+  --color-paper: #ffffff;
+  --color-ink: #1c2440;
+  --color-ink-muted: #545d72;
+  --color-line: #d5dbe3;
+  --color-fuchsia: #b8235a;
+  --color-mustard: #d99a1e;
+  --color-teal: #1e8577;
+  --color-violet: #5b3a8c;
+  --color-blue: #2f4fa3;
+  --color-error: #c2361f;
+  --color-error-soft: #fbe9e5;
+  --color-step: #fff1c7;
+  --color-selection: #cfd9ef;
+}
+
+html {
+  background-color: var(--color-salt);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-blue);
+  outline-offset: 2px;
+}
+
+/* Franja de aguayo: listas finas arriba y abajo, y una hilera de rombos sobre el color de la etapa */
+.aguayo {
+  --stripe: var(--color-ink);
+  background-image:
+    linear-gradient(to bottom, var(--stripe) 0 4px, transparent 4px calc(100% - 4px), var(--stripe) calc(100% - 4px)),
+    linear-gradient(to bottom, transparent 0 6px, rgb(255 255 255 / 0.55) 6px 8px, transparent 8px calc(100% - 8px), rgb(255 255 255 / 0.55) calc(100% - 8px) calc(100% - 6px), transparent calc(100% - 6px)),
+    linear-gradient(45deg, transparent 75%, rgb(255 255 255 / 0.18) 75%),
+    linear-gradient(-45deg, transparent 75%, rgb(255 255 255 / 0.18) 75%);
+  background-size: 100% 100%, 100% 100%, 12px 12px, 12px 12px;
+  background-position: 0 0, 0 0, 0 100%, 0 100%;
+}
+
+.aguayo-weave {
+  animation: weave 420ms ease-out both;
+  animation-delay: var(--weave-delay, 0ms);
+}
+
+@keyframes weave {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aguayo-weave {
+    animation: none;
+  }
+}
+
+.cm-step-line {
+  background-color: var(--color-step);
+}

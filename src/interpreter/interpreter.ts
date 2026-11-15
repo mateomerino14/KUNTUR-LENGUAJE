@@ -31,6 +31,7 @@ import {createBuiltins} from './builtins.js';
 import {Environment, type Binding} from './environment.js';
 import {checkIndex} from './indexing.js';
 import {RuntimeError} from './runtimeError.js';
+import {programFrameName, takeSnapshot, type StepListener} from './trace.js';
 import {describeType, isCallable, stringify, valuesEqual, type Callable, type UserFunction, type Value} from './values.js';
 
 export interface InterpretOptions {
@@ -38,6 +39,7 @@ export interface InterpretOptions {
   maxSteps?: number;
   maxCallDepth?: number;
   random?: () => number;
+  onStep?: StepListener;
 }
 
 export interface InterpretResult {
@@ -72,6 +74,8 @@ class Interpreter {
   private steps = 0;
   private callDepth = 0;
   private lastCallPosition: Position = {line: 1, column: 1};
+  private readonly onStep: StepListener | null;
+  private readonly callStack: string[] = [programFrameName];
 
   constructor(options: InterpretOptions) {
     const builtins = new Environment();
@@ -85,6 +89,7 @@ class Interpreter {
     this.globals = new Environment(builtins);
     this.maxSteps = options.maxSteps ?? defaultMaxSteps;
     this.maxCallDepth = options.maxCallDepth ?? defaultMaxCallDepth;
+    this.onStep = options.onStep ?? null;
   }
 
   // Ejecuta el programa y convierte los errores de ejecución en diagnósticos
@@ -123,6 +128,9 @@ class Interpreter {
 
   // Ejecuta una sentencia y avisa si debe cortarse el flujo
   private execute(statement: Statement, scope: Environment): Signal {
+    if (this.onStep !== null && statement.kind !== 'FunctionDeclaration' && statement.kind !== 'Block') {
+      this.onStep(statement.position, () => takeSnapshot(scope, this.globals, this.callStack));
+    }
     switch (statement.kind) {
       case 'VarDeclaration':
         this.executeVarDeclaration(statement, scope);
@@ -483,6 +491,7 @@ class Interpreter {
       throw new RuntimeError(tooDeepMessage(fn.declaration.name), position);
     }
     this.callDepth++;
+    this.callStack.push(fn.declaration.name);
     try {
       const callScope = new Environment(fn.closure);
       fn.declaration.params.forEach((param, index) => {
@@ -496,6 +505,7 @@ class Interpreter {
     }
     finally {
       this.callDepth--;
+      this.callStack.pop();
     }
   }
 

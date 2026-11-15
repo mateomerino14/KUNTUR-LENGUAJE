@@ -99,7 +99,7 @@ src/
 ├── compiler/       Traducción a WebAssembly y funciones del anfitrión
 │   └── wasm/       Codificación binaria y de texto de los módulos
 ├── errors/         Diagnósticos y sugerencias en español
-├── index.ts        API pública: tokenize, parse, run
+├── index.ts        API pública: tokenize, parse, check, compile, run, runCompiled
 └── cli.ts          Ejecutable de línea de comandos
 ```
 
@@ -122,6 +122,52 @@ Los mensajes están pensados para quien aprende a programar:
 - Explican qué pasó con palabras simples, sin jerga del compilador.
 - Mencionan el nombre o el símbolo involucrado entre comillas invertidas.
 - Cuando es posible, sugieren la corrección (`¿Quisiste decir \`edad\`?`).
+
+---
+
+## PLAYGROUND
+
+El playground (`playground/`) es una aplicación de React con Vite, Tailwind y CodeMirror que usa el compilador directamente desde `src/`.
+
+### Estructura
+
+```
+playground/src/
+├── components/ui/    Componentes genéricos: botones, pestañas, selector
+├── features/         Una carpeta por vista
+│   └── <vista>/
+│       ├── atoms/ molecules/ organisms/
+│       ├── hooks/        Lógica de la vista
+│       └── constants/    Catálogos de configuración visual
+├── hooks/            Estado de la página: análisis, ejecución, enlaces
+├── utils/            Funciones puras: árbol para mostrar, estado de las etapas
+├── constants/        Colores, ejemplos, pestañas y límites
+└── App.tsx           Página: invoca hooks y compone organismos
+```
+
+### Separación de responsabilidades
+
+| Capa | Puede | No puede |
+|---|---|---|
+| Hook | Mantener estado, llamar al compilador | Renderizar JSX |
+| Página | Invocar hooks, componer organismos | Llamar al compilador directamente |
+| Componente | Presentar datos recibidos por props | Conocer el estado de la página |
+
+### Estilos
+
+- Cada componente declara un objeto `styles` al inicio, con las clases de Tailwind.
+- Los colores se definen una sola vez como variables en `styles.css` (`@theme`) y se usan por su nombre (`bg-ink`, `text-teal`). En TypeScript se leen desde `constants/colors.ts`. Ningún componente escribe un color literal.
+
+### Comentarios y sintaxis
+
+- Los componentes y los hooks no llevan comentarios por función; el nombre y el contenido deben ser suficientes. Las funciones auxiliares, en cualquier archivo, sí llevan su comentario de una línea.
+- Dentro del JSX se admite el ternario para clases y valores simples; en la lógica se usan bloques `if`.
+
+### Accesibilidad
+
+- Todo control se puede usar con el teclado y muestra el foco.
+- Las pestañas siguen el patrón de `tablist` con flechas izquierda y derecha.
+- La animación de la franja se desactiva con `prefers-reduced-motion`.
 
 ---
 
