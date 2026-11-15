@@ -12,6 +12,7 @@ export interface TypeAnnotation {
 export interface NumberLiteral {
   kind: 'NumberLiteral';
   value: number;
+  decimal: boolean;
   position: Position;
 }
 

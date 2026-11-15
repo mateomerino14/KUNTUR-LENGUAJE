@@ -197,3 +197,11 @@ describe('errores de sintaxis', () => {
     expect(program.statements.map((statement) => statement.kind)).toEqual(['FunctionDeclaration', 'ExpressionStatement']);
   });
 });
+
+describe('números', () => {
+  // Un número escrito con punto se marca como decimal aunque su valor sea entero
+  test('distingue los números escritos con punto decimal', () => {
+    expect(expressionOf('2.0')).toMatchObject({kind: 'NumberLiteral', value: 2, decimal: true});
+    expect(expressionOf('2')).toMatchObject({kind: 'NumberLiteral', value: 2, decimal: false});
+  });
+});

@@ -328,7 +328,12 @@ class Parser {
     switch (token.type) {
       case TokenType.Number:
         this.advance();
-        return {kind: 'NumberLiteral', value: token.literal as number, position: token.position};
+        return {
+          kind: 'NumberLiteral',
+          value: token.literal as number,
+          decimal: token.lexeme.includes('.'),
+          position: token.position,
+        };
       case TokenType.String:
         this.advance();
         return {kind: 'StringLiteral', value: token.literal as string, position: token.position};
