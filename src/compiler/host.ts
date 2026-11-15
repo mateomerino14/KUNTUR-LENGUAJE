@@ -1,5 +1,11 @@
 import type {Position} from '../errors/diagnostic.js';
-import {divisionByZeroMessage, tooDeepMessage, tooManyStepsMessage, zeroStepMessage} from '../errors/messages.js';
+import {
+  divisionByZeroMessage,
+  tooDeepMessage,
+  tooManyStepsMessage,
+  undeclaredAssignmentMessage,
+  zeroStepMessage,
+} from '../errors/messages.js';
 import {createBuiltins} from '../interpreter/builtins.js';
 import {checkIndex} from '../interpreter/indexing.js';
 import {RuntimeError} from '../interpreter/runtimeError.js';
@@ -42,6 +48,8 @@ export const hostSignatures = {
   fail_zero_step: {params: ['i32', 'i32'], results: []},
   fail_too_many_steps: {params: ['i32', 'i32'], results: []},
   fail_too_deep: {params: [ext, 'i32', 'i32'], results: []},
+  fail_not_declared: {params: [ext, 'i32', 'i32'], results: []},
+  fail_assign_not_declared: {params: [ext, 'i32', 'i32'], results: []},
 } satisfies Record<string, FunctionSignature>;
 
 export type HostFunctionName = keyof typeof hostSignatures;
@@ -148,6 +156,12 @@ export const createHostFunctions = (options: HostOptions): Record<HostFunctionNa
     },
     fail_too_deep: (name: string, line: number, column: number) => {
       throw new RuntimeError(tooDeepMessage(name), at(line, column));
+    },
+    fail_not_declared: (name: string, line: number, column: number) => {
+      throw new RuntimeError(`\`${name}\` no existe.`, at(line, column));
+    },
+    fail_assign_not_declared: (name: string, line: number, column: number) => {
+      throw new RuntimeError(undeclaredAssignmentMessage(name), at(line, column));
     },
   };
 };

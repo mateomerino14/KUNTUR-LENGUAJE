@@ -18,6 +18,7 @@ import type {
   While,
 } from '../parser/ast.js';
 import {hostModuleName, hostSignatures, type HostFunctionName} from './host.js';
+import {namesUsedInFunctions} from './references.js';
 import {utf8Bytes} from './wasm/encoding.js';
 import {op, type Instruction, type ValueType} from './wasm/instructions.js';
 import type {DefinedFunction, Global, ImportedFunction, NamedValue, WasmModule} from './wasm/module.js';
@@ -34,9 +35,11 @@ export interface CompileResult {
 
 interface VariableBinding {
   kind: 'variable';
+  name: string;
   storage: 'global' | 'local';
   index: number;
   valueType: ValueType;
+  declaredFlag: number | null;
 }
 
 interface FunctionBinding {
@@ -54,6 +57,7 @@ interface LoopLabels {
 }
 
 interface FunctionState {
+  insideFunction: boolean;
   paramCount: number;
   locals: NamedValue[];
   usedNames: Set<string>;
@@ -195,6 +199,7 @@ class CodeGenerator {
   private readonly stepsGlobal: number;
   private readonly depthGlobal: number;
   private state: FunctionState = this.newFunctionState(0, []);
+  private namesInFunctions = new Set<string>();
   private tickHelper = 0;
   private enterCallHelper = 0;
   private exitCallHelper = 0;
@@ -210,6 +215,7 @@ class CodeGenerator {
   // Compila el programa: declara las funciones, genera `principal` y después los cuerpos de las funciones
   compile(program: Program): CompileResult {
     this.defineRuntimeHelpers();
+    this.namesInFunctions = namesUsedInFunctions(program);
     const declarations = program.statements.filter((statement) => statement.kind === 'FunctionDeclaration');
     const bindings = declarations.map((declaration) => this.declareFunction(declaration));
     const mainIndex = this.functions.length;
@@ -344,9 +350,11 @@ class CodeGenerator {
   private compileFunctionBody(declaration: FunctionDeclaration, binding: FunctionBinding): void {
     const placeholder = this.functions[binding.index];
     this.state = this.newFunctionState(declaration.params.length, placeholder.paramNames);
+    this.state.insideFunction = true;
     const scope = new CompileScope(this.globalScope);
     placeholder.signature.params.forEach((valueType, index) => {
-      scope.define(declaration.params[index].name, {kind: 'variable', storage: 'local', index, valueType});
+      const name = declaration.params[index].name;
+      scope.define(name, {kind: 'variable', name, storage: 'local', index, valueType, declaredFlag: null});
     });
     this.compileStatements(declaration.body.statements, scope, false);
     if (binding.returns !== null) {
@@ -358,7 +366,7 @@ class CodeGenerator {
 
   // Crea el estado vacío para generar una función
   private newFunctionState(paramCount: number, paramNames: string[]): FunctionState {
-    return {paramCount, locals: [], usedNames: new Set(paramNames), body: [], openLabels: 0, loops: []};
+    return {insideFunction: false, paramCount, locals: [], usedNames: new Set(paramNames), body: [], openLabels: 0, loops: []};
   }
 
   // Cierra la función actual con sus variables locales y su código
@@ -436,12 +444,18 @@ class CodeGenerator {
     if (topLevel) {
       const index = this.addGlobal(statement.name, valueType);
       this.emit({op: 'global.set', index});
-      scope.define(statement.name, {kind: 'variable', storage: 'global', index, valueType});
+      let declaredFlag: number | null = null;
+      if (this.namesInFunctions.has(statement.name)) {
+        // Una función puede llamarse antes de esta línea: la marca indica si la variable ya existe
+        declaredFlag = this.addGlobal(`${statement.name}_declarada`, 'i32');
+        this.emit({op: 'i32.const', value: 1}, {op: 'global.set', index: declaredFlag});
+      }
+      scope.define(statement.name, {kind: 'variable', name: statement.name, storage: 'global', index, valueType, declaredFlag});
     }
     else {
       const index = this.addLocal(statement.name, valueType);
       this.emit({op: 'local.set', index});
-      scope.define(statement.name, {kind: 'variable', storage: 'local', index, valueType});
+      scope.define(statement.name, {kind: 'variable', name: statement.name, storage: 'local', index, valueType, declaredFlag: null});
     }
   }
 
@@ -516,7 +530,14 @@ class CodeGenerator {
     this.emit({op: 'f64.const', value: 0}, {op: 'local.set', index: iteration});
     const loopScope = new CompileScope(scope);
     const current = this.addLocal(statement.variable, 'f64');
-    loopScope.define(statement.variable, {kind: 'variable', storage: 'local', index: current, valueType: 'f64'});
+    loopScope.define(statement.variable, {
+      kind: 'variable',
+      name: statement.variable,
+      storage: 'local',
+      index: current,
+      valueType: 'f64',
+      declaredFlag: null,
+    });
     const breakLabel = this.openLabel({op: 'block', result: null});
     const loopLabel = this.openLabel({op: 'loop', result: null});
     this.emit(
@@ -645,6 +666,7 @@ class CodeGenerator {
       );
       return 'f64';
     }
+    this.emitDeclaredCheck(binding, 'fail_not_declared', position);
     if (binding.storage === 'global') {
       this.emit({op: 'global.get', index: binding.index});
     }
@@ -652,6 +674,19 @@ class CodeGenerator {
       this.emit({op: 'local.get', index: binding.index});
     }
     return binding.valueType;
+  }
+
+  // Dentro de una función, falla si la variable global todavía no se declaró, igual que el intérprete
+  private emitDeclaredCheck(binding: VariableBinding, failure: 'fail_not_declared' | 'fail_assign_not_declared', position: Position): void {
+    if (!this.state.insideFunction || binding.declaredFlag === null) {
+      return;
+    }
+    this.emit({op: 'global.get', index: binding.declaredFlag}, op('i32.eqz'));
+    this.openLabel({op: 'if', result: null});
+    this.emitText(binding.name);
+    this.emitPosition(position);
+    this.callHost(failure);
+    this.closeLabel();
   }
 
   // Asigna un valor y lo deja en la pila, porque la asignación también es una expresión
@@ -675,6 +710,7 @@ class CodeGenerator {
     if (binding === undefined || binding.kind === 'function') {
       return valueType;
     }
+    this.emitDeclaredCheck(binding, 'fail_assign_not_declared', target.position);
     if (binding.storage === 'global') {
       this.emit({op: 'global.set', index: binding.index}, {op: 'global.get', index: binding.index});
     }

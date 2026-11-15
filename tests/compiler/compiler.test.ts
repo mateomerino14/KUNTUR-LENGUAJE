@@ -196,6 +196,13 @@ describe('errores de ejecución', () => {
     await expectSameRuntimeError(source);
   });
 
+  // Una función que usa una variable global antes de que se declare falla igual
+  test('falla igual al leer o asignar una global antes de declararla', async () => {
+    expect(await expectSameRuntimeError('funcion ver(): entero {\n  retornar total\n}\nmostrar(ver())\nvar total = 5')).toBe('`total` no existe.');
+    expect(await expectSameRuntimeError('funcion poner() {\n  total = 1\n}\nponer()\nvar total = 5')).toContain('Para crearla escribe');
+    expect(await expectSameOutput('var total = 5\nfuncion ver(): entero {\n  retornar total\n}\nmostrar(ver())')).toEqual(['5']);
+  });
+
   // Los ciclos infinitos se cortan con el mismo límite de pasos
   test('corta los ciclos infinitos', async () => {
     expect(await expectSameRuntimeError('mientras verdadero {\n}', smallStepLimit)).toContain('¿Hay un ciclo que nunca termina?');
