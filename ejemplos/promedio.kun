@@ -1,0 +1,22 @@
+// Pide las notas una por una y calcula el promedio.
+// En la terminal escribe cada dato; en el playground, cámbialos en Entrada.
+
+var cantidad = redondear(numero(leer("¿Cuántas notas vas a ingresar? ")))
+var suma = 0.0
+var mayor = 0.0
+
+para i desde 1 hasta cantidad {
+    var nota = numero(leer("Nota " + i + ": "))
+    suma = suma + nota
+    si nota > mayor {
+        mayor = nota
+    }
+}
+
+si cantidad > 0 {
+    mostrar("Promedio:", redondear(suma / cantidad))
+    mostrar("Nota más alta:", mayor)
+}
+sino {
+    mostrar("No ingresaste notas.")
+}
