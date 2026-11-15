@@ -13,6 +13,7 @@ const styles = {
   intro: 'text-[16px] text-ink-muted max-w-[62ch] leading-relaxed',
   diagnostics: 'flex flex-col gap-3',
   table: 'w-full border-collapse text-[15px]',
+  equivalent: 'font-normal text-ink-muted',
   head: 'text-left text-ink-muted font-bold border-b border-line',
   headCell: 'py-2 pr-4 font-bold',
   row: 'border-b border-line hover:bg-paper cursor-pointer',
@@ -56,7 +57,10 @@ export const TokensPanel = ({tokens, diagnostics, onSelectPosition}: TokensPanel
           >
             <td className={`${styles.cell} ${styles.position}`}>{token.position.line}:{token.position.column}</td>
             <td className={styles.cell}>{tokenLabel(token.type)}</td>
-            <td className={`${styles.cell} ${styles.lexeme}`}>{tokenText(token.lexeme, token.type)}</td>
+            <td className={`${styles.cell} ${styles.lexeme}`}>
+              {tokenText(token.original ?? token.lexeme, token.type)}
+              {token.original !== undefined && <span className={styles.equivalent}> = {token.lexeme}</span>}
+            </td>
           </tr>
         ))}
       </tbody>

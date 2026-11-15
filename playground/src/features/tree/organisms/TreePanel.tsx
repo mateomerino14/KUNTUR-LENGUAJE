@@ -1,5 +1,5 @@
 import {useMemo} from 'react';
-import type {Diagnostic, Position, Program, TypeInfo} from '../../../../../src/index.js';
+import type {Diagnostic, Language, Position, Program, TypeInfo} from '../../../../../src/index.js';
 import {toDisplayTree} from '../../../utils/astTree';
 import {DiagnosticItem} from '../../output/molecules/DiagnosticItem';
 import {TreeNode} from '../molecules/TreeNode';
@@ -7,6 +7,7 @@ import {TreeNode} from '../molecules/TreeNode';
 interface TreePanelProps {
   program: Program | null;
   types: TypeInfo | null;
+  language: Language;
   diagnostics: Diagnostic[];
   onSelectPosition: (position: Position) => void;
 }
@@ -18,8 +19,8 @@ const styles = {
   tree: 'text-[15px]',
 };
 
-export const TreePanel = ({program, types, diagnostics, onSelectPosition}: TreePanelProps) => {
-  const tree = useMemo(() => (program ? toDisplayTree(program, types) : null), [program, types]);
+export const TreePanel = ({program, types, language, diagnostics, onSelectPosition}: TreePanelProps) => {
+  const tree = useMemo(() => (program ? toDisplayTree(program, types, language) : null), [program, types, language]);
   return (
     <section className={styles.panel}>
       <p className={styles.intro}>
