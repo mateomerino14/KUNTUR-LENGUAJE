@@ -19,13 +19,18 @@ import type {
 } from '../parser/ast.js';
 import {hostModuleName, hostSignatures, type HostFunctionName} from './host.js';
 import {namesUsedInFunctions} from './references.js';
+import {LAYOUT, RUNTIME_GLOBALS, runtimeFunctions, TAGS, TEXT_HEADER_SIZE, WASI_IMPORTS, WASI_MODULE} from './wasi/runtime.js';
+import {assembleBody} from './wasm/assembler.js';
 import {utf8Bytes} from './wasm/encoding.js';
 import {op, type Instruction, type ValueType} from './wasm/instructions.js';
 import type {DefinedFunction, Global, ImportedFunction, NamedValue, WasmModule} from './wasm/module.js';
 
+export type CompileTarget = 'browser' | 'wasi';
+
 export interface CompileOptions {
   maxSteps?: number;
   maxCallDepth?: number;
+  target?: CompileTarget;
 }
 
 export interface CompileResult {
@@ -68,6 +73,8 @@ interface FunctionState {
 
 export const mainFunctionName = 'principal';
 export const memoryExportName = 'memoria';
+export const wasiMainName = '_start';
+export const wasiMemoryName = 'memory';
 
 const wasmPageSize = 65536;
 const stepsGlobalName = 'pasos';
@@ -157,8 +164,8 @@ const containsValueReturnInIf = (statement: If): boolean => {
   return containsValueReturn(statement.elseBranch.statements);
 };
 
-// Tipo de WebAssembly que representa un tipo de Kuntur, o null si todavía no se puede compilar
-const valueTypeOf = (type: Type): ValueType | null => {
+// Tipo de WebAssembly que representa un tipo de Kuntur, o null si todavía no se puede compilar; textos y listas usan el tipo de referencia del destino
+const valueTypeOf = (type: Type, referenceType: ValueType): ValueType | null => {
   switch (type.kind) {
     case 'integer':
     case 'decimal':
@@ -166,16 +173,36 @@ const valueTypeOf = (type: Type): ValueType | null => {
     case 'boolean':
       return 'i32';
     case 'text':
-      return 'externref';
+      return referenceType;
     case 'list':
-      if (valueTypeOf(type.element) === null) {
+      if (valueTypeOf(type.element, referenceType) === null) {
         return null;
       }
-      return 'externref';
+      return referenceType;
     default:
       return null;
   }
 };
+
+// Clase de valor según el tipo de Kuntur, para elegir cómo mostrarlo, convertirlo o guardarlo en una lista
+const valueKind = (type: Type): 'number' | 'boolean' | 'text' | 'reference' => {
+  if (type.kind === 'integer' || type.kind === 'decimal') {
+    return 'number';
+  }
+  if (type.kind === 'boolean') {
+    return 'boolean';
+  }
+  if (type.kind === 'text') {
+    return 'text';
+  }
+  return 'reference';
+};
+
+// Alinea un número hacia arriba al múltiplo indicado
+const alignTo = (value: number, alignment: number): number => Math.ceil(value / alignment) * alignment;
+
+// Escribe un entero de 32 bits en orden little-endian
+const int32Bytes = (value: number): number[] => [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
 
 // Indica si el tipo es un número entero o decimal
 const isNumber = (type: Type): boolean => type.kind === 'integer' || type.kind === 'decimal';
@@ -187,7 +214,11 @@ class CodeGenerator {
   private readonly diagnostics: Diagnostic[] = [];
   private readonly reportedLines = new Set<number>();
   private readonly imports: ImportedFunction[] = [];
-  private readonly importIndexes = new Map<HostFunctionName, number>();
+  private readonly importIndexes = new Map<string, number>();
+  private readonly target: CompileTarget;
+  private readonly refType: ValueType;
+  private readonly runtimeIndexes = new Map<string, number>();
+  private readonly runtimeGlobalIndexes = new Map<string, number>();
   private readonly functions: DefinedFunction[] = [];
   private readonly functionNames = new Set<string>(Object.keys(hostSignatures));
   private readonly userCalls: {op: 'call'; index: number}[] = [];
@@ -208,12 +239,93 @@ class CodeGenerator {
     this.types = types;
     this.maxSteps = options.maxSteps ?? defaultMaxSteps;
     this.maxCallDepth = options.maxCallDepth ?? defaultMaxCallDepth;
+    this.target = options.target ?? 'browser';
+    this.refType = 'externref';
+    if (this.target === 'wasi') {
+      this.refType = 'i32';
+      this.reserveWasiMemory();
+    }
     this.stepsGlobal = this.addGlobal(stepsGlobalName, 'i32');
     this.depthGlobal = this.addGlobal(depthGlobalName, 'i32');
   }
 
+  // Reserva el inicio de la memoria para el runtime y escribe los dos objetos lógicos fijos
+  private reserveWasiMemory(): void {
+    this.dataBytes.push(...new Array<number>(LAYOUT.reservedEnd).fill(0));
+    const booleanObjects: [number, number][] = [[LAYOUT.trueObject, 1], [LAYOUT.falseObject, 0]];
+    for (const [address, value] of booleanObjects) {
+      this.dataBytes.splice(address, 8, ...int32Bytes(TAGS.boolean), ...int32Bytes(value));
+    }
+    for (const global of RUNTIME_GLOBALS) {
+      const index = this.addGlobal(global.name, global.type);
+      let init: Instruction = {op: 'i32.const', value: global.initial};
+      if (global.type === 'f64') {
+        init = {op: 'f64.const', value: global.initial};
+      }
+      this.globals[index] = {...this.globals[index], init};
+      this.runtimeGlobalIndexes.set(global.name, index);
+    }
+  }
+
+  // Define las funciones del runtime independiente: primero sus índices, después sus cuerpos, que se llaman entre sí
+  private defineWasiRuntime(): void {
+    const definitions = runtimeFunctions(this.maxSteps);
+    for (const definition of definitions) {
+      this.runtimeIndexes.set(definition.name, this.functions.length);
+      this.functions.push({
+        name: uniqueName(this.functionNames, definition.name),
+        signature: {params: definition.params.map(([, type]) => type), results: definition.results},
+        paramNames: definition.params.map(([name]) => name.replace(/^\$/, '')),
+        locals: [],
+        body: [],
+      });
+    }
+    for (const definition of definitions) {
+      const index = this.runtimeIndexes.get(definition.name)!;
+      const variables = [...definition.params, ...definition.locals].map(([name]) => name.replace(/^\$/, ''));
+      const body = assembleBody(definition.body, {
+        local: (name) => this.indexOf(variables, name, definition.name),
+        global: (name) => this.runtimeGlobalIndexes.get(name.replace(/^\$/, ''))!,
+        call: (name) => this.runtimeCall(name.replace(/^\$/, '')),
+        text: (value) => this.registerLiteral(value).offset - TEXT_HEADER_SIZE,
+      });
+      this.functions[index] = {
+        ...this.functions[index],
+        locals: definition.locals.map(([name, type]) => ({name: name.replace(/^\$/, ''), type})),
+        body,
+      };
+    }
+  }
+
+  // Busca una variable del runtime por su nombre
+  private indexOf(variables: string[], name: string, functionName: string): number {
+    const index = variables.indexOf(name.replace(/^\$/, ''));
+    if (index === -1) {
+      throw new Error(`La variable ${name} no existe en la función ${functionName} del runtime`);
+    }
+    return index;
+  }
+
+  // Llamada desde el runtime: a una función de WASI o a otra función del runtime
+  private runtimeCall(name: string): Instruction {
+    const wasiSignature = WASI_IMPORTS[name];
+    if (wasiSignature !== undefined) {
+      return {op: 'call', index: this.importFunction(WASI_MODULE, name, wasiSignature)};
+    }
+    const index = this.runtimeIndexes.get(name);
+    if (index === undefined) {
+      throw new Error(`La función ${name} no existe en el runtime`);
+    }
+    const call: {op: 'call'; index: number} = {op: 'call', index};
+    this.userCalls.push(call);
+    return call;
+  }
+
   // Compila el programa: declara las funciones, genera `principal` y después los cuerpos de las funciones
   compile(program: Program): CompileResult {
+    if (this.target === 'wasi') {
+      this.defineWasiRuntime();
+    }
     this.defineRuntimeHelpers();
     this.namesInFunctions = namesUsedInFunctions(program);
     const declarations = program.statements.filter((statement) => statement.kind === 'FunctionDeclaration');
@@ -240,14 +352,23 @@ class CodeGenerator {
     if (this.dataBytes.length > 0) {
       data = [{offset: 0, bytes: this.dataBytes}];
     }
+    let mainName = mainFunctionName;
+    let memoryName = memoryExportName;
+    if (this.target === 'wasi') {
+      mainName = wasiMainName;
+      memoryName = wasiMemoryName;
+      // La memoria libre empieza después de los textos escritos en el programa
+      const heap = this.runtimeGlobalIndexes.get('heap')!;
+      this.globals[heap] = {...this.globals[heap], init: {op: 'i32.const', value: alignTo(this.dataBytes.length, 8)}};
+    }
     return {
       imports: this.imports,
       functions: this.functions,
       globals: this.globals,
-      memory: {name: memoryExportName, pages},
+      memory: {name: memoryName, pages},
       exports: [
-        {name: mainFunctionName, kind: 'function', index: mainIndex},
-        {name: memoryExportName, kind: 'memory', index: 0},
+        {name: mainName, kind: 'function', index: mainIndex},
+        {name: memoryName, kind: 'memory', index: 0},
       ],
       data,
     };
@@ -311,7 +432,7 @@ class CodeGenerator {
   private declareFunction(declaration: FunctionDeclaration): FunctionBinding {
     const type: FunctionType | undefined = this.types.functions.get(declaration);
     const params = declaration.params.map((param, index) => {
-      const valueType = valueTypeOf(type?.params[index] ?? unknownType);
+      const valueType = valueTypeOf(type?.params[index] ?? unknownType, this.refType);
       if (valueType === null) {
         this.report(
           `Para compilar a WebAssembly, el parámetro \`${param.name}\` de \`${declaration.name}\` necesita su tipo, como \`${param.name}: entero\` o \`${param.name}: lista de texto\`.`,
@@ -323,7 +444,7 @@ class CodeGenerator {
     });
     let returns: ValueType | null = null;
     if (declaration.returnType !== null) {
-      returns = valueTypeOf(type?.returns ?? unknownType);
+      returns = valueTypeOf(type?.returns ?? unknownType, this.refType);
       if (returns === null) {
         this.report(`Para compilar a WebAssembly, el tipo de retorno de \`${declaration.name}\` debe ser conocido.`, declaration.returnType.position);
         returns = 'f64';
@@ -430,7 +551,7 @@ class CodeGenerator {
   // Compila una declaración: global en el nivel superior, local dentro de bloques y funciones
   private compileVarDeclaration(statement: VarDeclaration, scope: CompileScope, topLevel: boolean): void {
     const type = this.types.declarations.get(statement) ?? unknownType;
-    let valueType = valueTypeOf(type);
+    let valueType = valueTypeOf(type, this.refType);
     if (valueType === null) {
       this.reportUnknownVariable(statement.name, type, statement.position);
       valueType = 'f64';
@@ -603,7 +724,7 @@ class CodeGenerator {
         return 'f64';
       case 'StringLiteral':
         this.emitText(expression.value);
-        return 'externref';
+        return this.refType;
       case 'BooleanLiteral':
         this.emit(this.flag(expression.value));
         return 'i32';
@@ -637,23 +758,24 @@ class CodeGenerator {
 
   // Crea una lista vacía y le agrega cada elemento
   private compileList(elements: Expression[], type: Type, scope: CompileScope, position: Position): ValueType {
-    if (type.kind !== 'list' || valueTypeOf(type) === null) {
+    if (type.kind !== 'list' || valueTypeOf(type, this.refType) === null) {
       this.report(
         'Para compilar a WebAssembly, esta lista necesita el tipo de sus elementos; anota la variable, por ejemplo: `var lista: lista de entero = []`.',
         position,
       );
-      return 'externref';
+      return this.refType;
     }
-    const list = this.addLocal('lista_nueva', 'externref');
+    const list = this.addLocal('lista_nueva', this.refType);
     this.callHost('list_new');
     this.emit({op: 'local.set', index: list});
     for (const element of elements) {
       this.emit({op: 'local.get', index: list});
-      this.emitBox(this.compileValue(element, scope));
+      this.compileValue(element, scope);
+      this.emitBox(this.typeOf(element));
       this.callHost('list_push');
     }
     this.emit({op: 'local.get', index: list});
-    return 'externref';
+    return this.refType;
   }
 
   // Lee una variable local o global
@@ -699,7 +821,7 @@ class CodeGenerator {
       this.compileValue(target.target, scope);
       this.compileValue(target.index, scope);
       this.emit({op: 'local.get', index: value});
-      this.emitBox(valueType);
+      this.emitBox(this.typeOf(expression.value));
       this.emitPosition(target.position);
       this.callHost('list_set');
       this.emit({op: 'local.get', index: value});
@@ -751,16 +873,18 @@ class CodeGenerator {
         return this.compileComparison(expression, expression.operator, leftType, scope);
       case '+':
         if (leftType.kind === 'text' || rightType.kind === 'text') {
-          this.emitAsText(this.compileValue(expression.left, scope), leftType);
-          this.emitAsText(this.compileValue(expression.right, scope), rightType);
+          this.compileValue(expression.left, scope);
+          this.emitAsText(leftType);
+          this.compileValue(expression.right, scope);
+          this.emitAsText(rightType);
           this.callHost('text_concat');
-          return 'externref';
+          return this.refType;
         }
         if (leftType.kind === 'list') {
           this.compileValue(expression.left, scope);
           this.compileValue(expression.right, scope);
           this.callHost('list_concat');
-          return 'externref';
+          return this.refType;
         }
         return this.compileArithmetic(expression, scope);
       case '-':
@@ -902,7 +1026,8 @@ class CodeGenerator {
       case 'mostrar':
         this.callHost('line_start');
         for (const arg of args) {
-          this.emitAppend(this.compileValue(arg, scope));
+          this.compileValue(arg, scope);
+          this.emitAppend(this.typeOf(arg));
         }
         this.callHost('line_end');
         return null;
@@ -912,7 +1037,8 @@ class CodeGenerator {
         return 'f64';
       case 'agregar':
         this.compileValue(args[0], scope);
-        this.emitBox(this.compileValue(args[1], scope));
+        this.compileValue(args[1], scope);
+        this.emitBox(this.typeOf(args[1]));
         this.callHost('list_push');
         return null;
       case 'quitar':
@@ -921,15 +1047,16 @@ class CodeGenerator {
         this.callHost('list_pop');
         return this.emitUnbox(this.typeOf(expression));
       case 'texto':
-        this.emitAsText(this.compileValue(args[0], scope), this.typeOf(args[0]));
-        return 'externref';
+        this.compileValue(args[0], scope);
+        this.emitAsText(this.typeOf(args[0]));
+        return this.refType;
       case 'numero':
         return this.compileToNumber(args[0], expression.position, scope);
       case 'tipo':
         this.compileValue(args[0], scope);
         this.emit(op('drop'));
         this.emitText(runtimeTypeNames[this.typeOf(args[0]).kind]);
-        return 'externref';
+        return this.refType;
       case 'redondear':
         this.compileValue(args[0], scope);
         this.emit({op: 'f64.const', value: 0.5}, op('f64.add'), op('f64.floor'));
@@ -943,7 +1070,7 @@ class CodeGenerator {
         this.compileValue(args[0], scope);
         this.emitPosition(expression.position);
         this.callHost('read_line');
-        return 'externref';
+        return this.refType;
       case 'aleatorio':
         this.compileValue(args[0], scope);
         this.compileValue(args[1], scope);
@@ -957,8 +1084,8 @@ class CodeGenerator {
 
   // Convierte un texto en número; si ya es número lo deja igual
   private compileToNumber(arg: Expression, position: Position, scope: CompileScope): ValueType {
-    const valueType = this.compileValue(arg, scope);
-    if (valueType === 'externref') {
+    this.compileValue(arg, scope);
+    if (this.typeOf(arg).kind === 'text') {
       this.emitPosition(position);
       this.callHost('parse_number');
     }
@@ -973,18 +1100,19 @@ class CodeGenerator {
     this.emitPosition(expression.position);
     if (containerType.kind === 'text') {
       this.callHost('text_at');
-      return 'externref';
+      return this.refType;
     }
     this.callHost('list_get');
     return this.emitUnbox(this.typeOf(expression));
   }
 
   // Agrega el valor a la línea que está armando `mostrar`
-  private emitAppend(valueType: ValueType): void {
-    if (valueType === 'f64') {
+  private emitAppend(type: Type): void {
+    const kind = valueKind(type);
+    if (kind === 'number') {
       this.callHost('append_number');
     }
-    else if (valueType === 'i32') {
+    else if (kind === 'boolean') {
       this.callHost('append_bool');
     }
     else {
@@ -993,49 +1121,63 @@ class CodeGenerator {
   }
 
   // Convierte el valor de la pila en texto, como lo haría `texto()`
-  private emitAsText(valueType: ValueType, type: Type): void {
-    if (valueType === 'f64') {
+  private emitAsText(type: Type): void {
+    const kind = valueKind(type);
+    if (kind === 'number') {
       this.callHost('number_to_text');
     }
-    else if (valueType === 'i32') {
+    else if (kind === 'boolean') {
       this.callHost('bool_to_text');
     }
-    else if (type.kind !== 'text') {
+    else if (kind !== 'text') {
       this.callHost('ref_to_text');
     }
   }
 
   // Convierte el valor de la pila en una referencia para guardarlo en una lista
-  private emitBox(valueType: ValueType): void {
-    if (valueType === 'f64') {
+  private emitBox(type: Type): void {
+    const kind = valueKind(type);
+    if (kind === 'number') {
       this.callHost('box_number');
     }
-    else if (valueType === 'i32') {
+    else if (kind === 'boolean') {
       this.callHost('box_bool');
     }
   }
 
   // Convierte una referencia leída de una lista en el valor de su tipo
   private emitUnbox(type: Type): ValueType {
-    const valueType = valueTypeOf(type);
-    if (valueType === 'f64') {
+    const kind = valueKind(type);
+    if (kind === 'number') {
       this.callHost('unbox_number');
     }
-    else if (valueType === 'i32') {
+    else if (kind === 'boolean') {
       this.callHost('unbox_bool');
     }
-    return valueType ?? 'externref';
+    return valueTypeOf(type, this.refType) ?? this.refType;
   }
 
-  // Deja en la pila el inicio y el largo de un texto guardado en la memoria del módulo
-  private emitLiteralBounds(text: string): void {
+  // Guarda un texto en la memoria del módulo una sola vez; en WASI lleva delante su etiqueta y su largo, como cualquier texto
+  private registerLiteral(text: string): {offset: number; length: number} {
     let literal = this.literals.get(text);
     if (literal === undefined) {
       const bytes = utf8Bytes(text);
+      if (this.target === 'wasi') {
+        while (this.dataBytes.length % 4 !== 0) {
+          this.dataBytes.push(0);
+        }
+        this.dataBytes.push(...int32Bytes(TAGS.text), ...int32Bytes(bytes.length));
+      }
       literal = {offset: this.dataBytes.length, length: bytes.length};
       this.dataBytes.push(...bytes);
       this.literals.set(text, literal);
     }
+    return literal;
+  }
+
+  // Deja en la pila el inicio y el largo de un texto guardado en la memoria del módulo
+  private emitLiteralBounds(text: string): void {
+    const literal = this.registerLiteral(text);
     this.emit({op: 'i32.const', value: literal.offset}, {op: 'i32.const', value: literal.length});
   }
 
@@ -1090,15 +1232,25 @@ class CodeGenerator {
     return {op: 'i32.const', value: 0};
   }
 
-  // Llama a una función del anfitrión, importándola la primera vez que se usa
+  // Llama a una operación del anfitrión: importada de JavaScript en el navegador, o del runtime propio en WASI
   private callHost(name: HostFunctionName): void {
-    let index = this.importIndexes.get(name);
+    if (this.target === 'wasi') {
+      this.callDefined(this.runtimeIndexes.get(name)!);
+      return;
+    }
+    this.emit({op: 'call', index: this.importFunction(hostModuleName, name, hostSignatures[name])});
+  }
+
+  // Importa una función la primera vez que se usa y devuelve su índice
+  private importFunction(module: string, field: string, signature: DefinedFunction['signature']): number {
+    const key = `${module}.${field}`;
+    let index = this.importIndexes.get(key);
     if (index === undefined) {
       index = this.imports.length;
-      this.imports.push({module: hostModuleName, field: name, name, signature: hostSignatures[name]});
-      this.importIndexes.set(name, index);
+      this.imports.push({module, field, name: field, signature});
+      this.importIndexes.set(key, index);
     }
-    this.emit({op: 'call', index});
+    return index;
   }
 
   // Abre un bloque, ciclo o condicional y devuelve su etiqueta

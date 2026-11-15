@@ -37,6 +37,22 @@ export const encodeSigned = (value: number): number[] => {
   }
 };
 
+// Codifica un entero de 64 bits con signo en LEB128
+export const encodeSigned64 = (value: bigint): number[] => {
+  const bytes: number[] = [];
+  let remaining = BigInt.asIntN(64, value);
+  while (true) {
+    const byte = Number(remaining & 0x7fn);
+    remaining >>= 7n;
+    const signBitClear = (byte & signBit) === 0;
+    if ((remaining === 0n && signBitClear) || (remaining === -1n && !signBitClear)) {
+      bytes.push(byte);
+      return bytes;
+    }
+    bytes.push(byte | continuationBit);
+  }
+};
+
 // Codifica un número de punto flotante de 64 bits en orden little-endian
 export const encodeF64 = (value: number): number[] => {
   const buffer = new ArrayBuffer(f64ByteLength);

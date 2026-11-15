@@ -62,6 +62,20 @@ const blockResultText = (result: ValueType | null): string => {
   return ` (result ${result})`;
 };
 
+// Escribe un decimal como lo acepta WAT: el infinito es `inf` y "no es un número" es `nan`
+const watFloat = (value: number): string => {
+  if (Number.isNaN(value)) {
+    return 'nan';
+  }
+  if (value === Infinity) {
+    return 'inf';
+  }
+  if (value === -Infinity) {
+    return '-inf';
+  }
+  return String(value);
+};
+
 interface NameTables {
   functions: string[];
   globals: string[];
@@ -72,8 +86,22 @@ interface NameTables {
 const instructionText = (instruction: Instruction, names: NameTables): string => {
   switch (instruction.op) {
     case 'i32.const':
-    case 'f64.const':
+    case 'i64.const':
       return `${instruction.op} ${instruction.value}`;
+    case 'f64.const':
+      return `f64.const ${watFloat(instruction.value)}`;
+    case 'i32.load':
+    case 'i64.load':
+    case 'f64.load':
+    case 'i32.load8_u':
+    case 'i32.store':
+    case 'i64.store':
+    case 'f64.store':
+    case 'i32.store8':
+      if (instruction.offset === 0) {
+        return instruction.op;
+      }
+      return `${instruction.op} offset=${instruction.offset}`;
     case 'local.get':
     case 'local.set':
     case 'local.tee':
