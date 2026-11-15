@@ -2,6 +2,8 @@ import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagno
 import {
   arityMessage,
   dictKeyMessage,
+  missingFieldMessage,
+  notRecordMessage,
   forEachTargetMessage,
   readOnlyMessage,
   redeclarationMessage,
@@ -15,6 +17,7 @@ import type {
   Call,
   Expression,
   DictLiteral,
+  Field,
   For,
   ForEach,
   FunctionDeclaration,
@@ -22,6 +25,7 @@ import type {
   Index,
   Logical,
   Program,
+  RecordDeclaration,
   Return,
   Statement,
   TypeAnnotation,
@@ -52,6 +56,7 @@ import {
   typeToString,
   unknownType,
   type FunctionType,
+  type RecordType,
   type Type,
 } from './types.js';
 
@@ -60,6 +65,7 @@ export interface TypeInfo {
   declarations: Map<VarDeclaration, Type>;
   functions: Map<FunctionDeclaration, FunctionType>;
   loops: Map<For | ForEach, Type>;
+  records: Map<string, RecordType>;
 }
 
 export interface CheckResult {
@@ -153,7 +159,13 @@ const alwaysReturns = (statements: Statement[]): boolean => statements.some(stat
 
 class Checker {
   private readonly diagnostics: Diagnostic[] = [];
-  private readonly types: TypeInfo = {expressions: new Map(), declarations: new Map(), functions: new Map(), loops: new Map()};
+  private readonly types: TypeInfo = {
+    expressions: new Map(),
+    declarations: new Map(),
+    functions: new Map(),
+    loops: new Map(),
+    records: new Map(),
+  };
   private readonly globals: Scope;
   private functionContext: FunctionContext | null = null;
 
@@ -167,10 +179,54 @@ class Checker {
 
   // Revisa el programa completo y devuelve los errores encontrados antes de ejecutar
   check(program: Program): CheckResult {
+    this.declareRecords(program.statements);
     this.checkStatements(program.statements, this.globals);
     // Los cuerpos de las funciones se revisan al final de su bloque; se ordena para leer los errores de arriba hacia abajo
     const sorted = [...this.diagnostics].sort(comparePositions);
     return {diagnostics: sorted, types: this.types};
+  }
+
+  // Declara los registros del programa antes que todo, para usarlos como tipos y crear valores desde cualquier parte
+  private declareRecords(statements: Statement[]): void {
+    const declarations = statements.filter((statement): statement is RecordDeclaration => statement.kind === 'RecordDeclaration');
+    for (const declaration of declarations) {
+      if (typeNames.has(declaration.name) || declaration.name === listTypeName || declaration.name === dictTypeName) {
+        this.report(`\`${declaration.name}\` ya es el nombre de un tipo; elige otro nombre para el registro.`, declaration.position);
+        continue;
+      }
+      if (this.types.records.has(declaration.name)) {
+        this.report(redeclarationMessage(declaration.name), declaration.position);
+        continue;
+      }
+      this.types.records.set(declaration.name, {kind: 'record', name: declaration.name, fields: []});
+    }
+    for (const declaration of declarations) {
+      const record = this.types.records.get(declaration.name);
+      if (record === undefined || record.fields.length > 0) {
+        continue;
+      }
+      for (const field of declaration.fields) {
+        if (record.fields.some((existing) => existing.name === field.name)) {
+          this.report(`El campo \`${field.name}\` está repetido en \`${declaration.name}\`.`, field.position);
+          continue;
+        }
+        record.fields.push({name: field.name, type: this.resolveAnnotation(field.typeAnnotation)});
+      }
+      this.defineSymbol(this.globals, {
+        name: declaration.name,
+        type: {
+          kind: 'function',
+          name: declaration.name,
+          params: record.fields.map((field) => field.type),
+          paramNames: record.fields.map((field) => field.name),
+          returns: record,
+        },
+        kind: 'function',
+        inferred: false,
+        builtin: null,
+        position: declaration.position,
+      });
+    }
   }
 
   // Crea el símbolo de una función propia del lenguaje
@@ -209,6 +265,11 @@ class Checker {
         this.checkVarDeclaration(statement, scope);
         return;
       case 'FunctionDeclaration':
+        return;
+      case 'RecordDeclaration':
+        if (scope !== this.globals) {
+          this.report('Los registros se declaran en el programa principal, fuera de funciones y bloques.', statement.position);
+        }
         return;
       case 'Return':
         this.checkReturn(statement, scope);
@@ -356,12 +417,16 @@ class Checker {
       }
       return dictOf(this.resolveAnnotation(annotation.element));
     }
+    const record = this.types.records.get(annotation.name);
+    if (record !== undefined) {
+      return record;
+    }
     const type = typeNames.get(annotation.name);
     if (type === undefined) {
       const message = withSuggestion(
         `El tipo \`${annotation.name}\` no existe; los tipos son \`entero\`, \`decimal\`, \`texto\`, \`logico\`, \`lista de ...\` y \`diccionario de ...\`.`,
         annotation.name,
-        [...typeNames.keys(), listTypeName, dictTypeName],
+        [...typeNames.keys(), listTypeName, dictTypeName, ...this.types.records.keys()],
       );
       this.report(message, annotation.position);
       return unknownType;
@@ -582,6 +647,8 @@ class Checker {
         return this.typeOfList(expression.elements, scope);
       case 'DictLiteral':
         return this.typeOfDict(expression, scope);
+      case 'Field':
+        return this.fieldType(expression, this.typeOf(expression.target, scope));
       case 'Variable':
         return this.typeOfVariable(expression.name, scope, expression.position);
       case 'Assign':
@@ -636,6 +703,16 @@ class Checker {
     const target = expression.target;
     if (target.kind === 'Index') {
       this.checkIndexAssign(target, valueType, scope);
+      return valueType;
+    }
+    if (target.kind === 'Field') {
+      const fieldType = this.typeOf(target, scope);
+      if (!isAssignable(fieldType, valueType)) {
+        this.report(
+          `El campo \`${target.name}\` es de tipo ${typeToString(fieldType)}; no se le puede asignar ${describeType(valueType)}.`,
+          expression.value.position,
+        );
+      }
       return valueType;
     }
     const symbol = scope.lookup(target.name);
@@ -886,6 +963,24 @@ class Checker {
       );
     }
     return unknownType;
+  }
+
+  // Tipo de `registro.campo`; si el campo no existe sugiere el más parecido
+  private fieldType(expression: Field, targetType: Type): Type {
+    if (isUnknown(targetType)) {
+      return unknownType;
+    }
+    if (targetType.kind !== 'record') {
+      this.report(notRecordMessage(describeType(targetType)), expression.position);
+      return unknownType;
+    }
+    const field = targetType.fields.find((candidate) => candidate.name === expression.name);
+    if (field === undefined) {
+      const names = targetType.fields.map((candidate) => candidate.name);
+      this.report(withSuggestion(missingFieldMessage(targetType.name, expression.name), expression.name, names), expression.position);
+      return unknownType;
+    }
+    return field.type;
   }
 
   // Exige que la clave de un diccionario sea un texto

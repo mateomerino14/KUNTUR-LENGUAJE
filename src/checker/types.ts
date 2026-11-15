@@ -14,6 +14,17 @@ export interface DictType {
   element: Type;
 }
 
+export interface RecordFieldType {
+  name: string;
+  type: Type;
+}
+
+export interface RecordType {
+  kind: 'record';
+  name: string;
+  fields: RecordFieldType[];
+}
+
 export interface FunctionType {
   kind: 'function';
   name: string;
@@ -22,7 +33,7 @@ export interface FunctionType {
   returns: Type;
 }
 
-export type Type = PrimitiveType | ListType | DictType | FunctionType;
+export type Type = PrimitiveType | ListType | DictType | RecordType | FunctionType;
 
 export const integerType: PrimitiveType = {kind: 'integer'};
 export const decimalType: PrimitiveType = {kind: 'decimal'};
@@ -83,6 +94,9 @@ export const typeToString = (type: Type): string => {
   if (type.kind === 'function') {
     return 'función';
   }
+  if (type.kind === 'record') {
+    return type.name;
+  }
   return primitiveNames[type.kind];
 };
 
@@ -96,6 +110,9 @@ export const describeType = (type: Type): string => {
   }
   if (type.kind === 'function') {
     return 'una función';
+  }
+  if (type.kind === 'record') {
+    return `un registro ${type.name}`;
   }
   return primitiveDescriptions[type.kind];
 };
@@ -128,6 +145,9 @@ export const isAssignable = (target: Type, source: Type): boolean => {
       return true;
     }
     return isAssignable(target.element, source.element) && isAssignable(source.element, target.element);
+  }
+  if (target.kind === 'record' && source.kind === 'record') {
+    return target.name === source.name;
   }
   return target.kind === source.kind;
 };

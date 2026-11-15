@@ -93,3 +93,13 @@ export const missingKeyMessage = (quotedKey: string): string => {
 export const dictKeyMessage = (description: string): string => {
   return `Las claves de un diccionario son textos, pero aquí hay ${description}.`;
 };
+
+// Error al leer o cambiar un campo que el registro no tiene
+export const missingFieldMessage = (recordName: string, field: string): string => {
+  return `\`${recordName}\` no tiene el campo \`${field}\`.`;
+};
+
+// Error al pedir un campo a algo que no es un registro
+export const notRecordMessage = (description: string): string => {
+  return `Solo los registros tienen campos, pero aquí hay ${description}.`;
+};
