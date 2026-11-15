@@ -85,6 +85,16 @@ describe('sentencias', () => {
     expect(statement).toMatchObject({kind: 'VarDeclaration', name: 'edad', constant: false, typeAnnotation: {name: 'entero'}});
   });
 
+  // `lista de tipo` guarda el tipo de los elementos, también anidado
+  test('lee tipos de listas', () => {
+    expect(firstStatement('var notas: lista de entero = []')).toMatchObject({
+      typeAnnotation: {name: 'lista', element: {name: 'entero', element: null}},
+    });
+    expect(firstStatement('var matriz: lista de lista de decimal = []')).toMatchObject({
+      typeAnnotation: {name: 'lista', element: {name: 'lista', element: {name: 'decimal'}}},
+    });
+  });
+
   // Las constantes se marcan como tales
   test('lee constantes', () => {
     expect(firstStatement('constante PI = 3.14')).toMatchObject({kind: 'VarDeclaration', constant: true});

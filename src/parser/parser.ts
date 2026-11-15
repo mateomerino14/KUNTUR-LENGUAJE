@@ -30,6 +30,9 @@ const statementStarters: ReadonlySet<TokenType> = new Set([
   TokenType.Continue,
 ]);
 
+const listTypeName = 'lista';
+const listElementWord = 'de';
+
 const statementSeparators: ReadonlySet<TokenType> = new Set([TokenType.Newline, TokenType.Semicolon]);
 
 // Error interno que corta la sentencia actual; el diagnóstico ya quedó registrado
@@ -183,8 +186,18 @@ class Parser {
     if (!this.match(TokenType.Colon)) {
       return null;
     }
-    const name = this.consume(TokenType.Identifier, 'Después de `:` va el nombre de un tipo, por ejemplo: `entero`.');
-    return {name: name.lexeme, position: name.position};
+    return this.parseType('Después de `:` va el nombre de un tipo, por ejemplo: `entero`.');
+  }
+
+  // Analiza un nombre de tipo; `lista de tipo` indica el tipo de sus elementos
+  private parseType(message: string): TypeAnnotation {
+    const name = this.consume(TokenType.Identifier, message);
+    let element: TypeAnnotation | null = null;
+    if (name.lexeme === listTypeName && this.peek().lexeme === listElementWord) {
+      this.advance();
+      element = this.parseType('Después de `lista de` va el tipo de los elementos, por ejemplo: `lista de entero`.');
+    }
+    return {name: name.lexeme, element, position: name.position};
   }
 
   // Analiza `retornar` con o sin valor

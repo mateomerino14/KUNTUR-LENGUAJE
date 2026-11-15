@@ -6,6 +6,7 @@ export type UnaryOperator = '-' | 'no';
 
 export interface TypeAnnotation {
   name: string;
+  element: TypeAnnotation | null;
   position: Position;
 }
 
