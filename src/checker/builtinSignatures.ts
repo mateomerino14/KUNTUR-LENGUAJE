@@ -125,6 +125,16 @@ const signatures: BuiltinSignature[] = [
     },
   },
   {
+    name: 'leer',
+    arity: 1,
+    check: ([prompt], report) => {
+      if (prompt.kind !== 'text' && !isUnknown(prompt)) {
+        report(0, `\`leer\` necesita un texto para preguntar, pero recibió ${describeType(prompt)}.`);
+      }
+      return textType;
+    },
+  },
+  {
     name: 'aleatorio',
     arity: 2,
     check: ([min, max], report) => {
