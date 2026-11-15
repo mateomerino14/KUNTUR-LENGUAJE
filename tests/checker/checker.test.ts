@@ -236,3 +236,19 @@ describe('orden de los errores', () => {
     expect(lines).toEqual([2, 4]);
   });
 });
+
+describe('tipos registrados', () => {
+  // El análisis guarda el tipo de cada expresión y declaración para las etapas siguientes
+  test('registra los tipos de expresiones, declaraciones, funciones y ciclos', () => {
+    const {program} = parse('var a = 1 + 2.5\nfuncion f(n: entero): texto {\n  retornar texto(n)\n}\npara i desde 1 hasta 3 {\n}');
+    const {types} = checkProgram(program!);
+    const [declaration, fn, loop] = program!.statements;
+    if (declaration.kind !== 'VarDeclaration' || fn.kind !== 'FunctionDeclaration' || loop.kind !== 'For') {
+      throw new Error('El programa de prueba cambió');
+    }
+    expect(types.declarations.get(declaration)).toEqual({kind: 'decimal'});
+    expect(types.expressions.get(declaration.initializer!)).toEqual({kind: 'decimal'});
+    expect(types.functions.get(fn)).toMatchObject({params: [{kind: 'integer'}], returns: {kind: 'text'}});
+    expect(types.loops.get(loop)).toEqual({kind: 'integer'});
+  });
+});
