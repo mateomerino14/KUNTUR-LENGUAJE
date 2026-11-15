@@ -1,11 +1,12 @@
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {indentOnInput, bracketMatching} from '@codemirror/language';
 import {setDiagnostics, type Diagnostic as LintDiagnostic} from '@codemirror/lint';
-import {EditorState, StateEffect, StateField, type Extension} from '@codemirror/state';
+import {Compartment, EditorState, StateEffect, StateField, type Extension} from '@codemirror/state';
 import {Decoration, EditorView, keymap, lineNumbers, type DecorationSet} from '@codemirror/view';
 import {useEffect, useRef, type RefObject} from 'react';
 import {tokenRangeAt} from '../../../utils/editorRanges';
 import {editorHighlight, editorTheme} from '../constants/editorTheme';
+import type {Language} from '../../../../../src/index.js';
 import {kunturLanguage} from '../constants/kunturLanguage';
 
 export interface EditorDiagnostic {
@@ -27,6 +28,7 @@ interface UseCodeEditorOptions {
   diagnostics: EditorDiagnostic[];
   stepLine: number | null;
   readOnly?: boolean;
+  language?: Language;
   extensions?: Extension[];
 }
 
@@ -55,6 +57,8 @@ const stepLineField = StateField.define<DecorationSet>({
 
 export const useCodeEditor = (container: RefObject<HTMLDivElement | null>, options: UseCodeEditorOptions) => {
   const viewRef = useRef<EditorView | null>(null);
+  const languageCompartment = useRef(new Compartment());
+  const language = options.language ?? 'es';
   const callbacks = useRef({onChange: options.onChange, onRun: options.onRun});
 
   useEffect(() => {
@@ -80,7 +84,7 @@ export const useCodeEditor = (container: RefObject<HTMLDivElement | null>, optio
           bracketMatching(),
           runKeymap,
           keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-          kunturLanguage,
+          languageCompartment.current.of(kunturLanguage(language)),
           editorHighlight,
           editorTheme,
           stepLineField,
@@ -103,6 +107,10 @@ export const useCodeEditor = (container: RefObject<HTMLDivElement | null>, optio
     // El editor se crea una sola vez; los cambios de valor se aplican en el efecto siguiente
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [container]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({effects: languageCompartment.current.reconfigure(kunturLanguage(language))});
+  }, [language]);
 
   useEffect(() => {
     const view = viewRef.current;
