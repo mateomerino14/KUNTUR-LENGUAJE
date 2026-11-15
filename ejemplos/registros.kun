@@ -1,0 +1,28 @@
+// Una libreta de notas con registros
+registro Alumno {
+    nombre: texto
+    nota: entero
+}
+
+funcion aprobados(curso: lista de Alumno): lista de Alumno {
+    var resultado: lista de Alumno = []
+    para cada alumno en curso {
+        si alumno.nota >= 51 {
+            agregar(resultado, alumno)
+        }
+    }
+    retornar resultado
+}
+
+var curso: lista de Alumno = [
+    Alumno("Ana", 85),
+    Alumno("Luis", 48),
+    Alumno("Eva", 72),
+]
+curso[1].nota = curso[1].nota + 5
+
+para cada alumno en curso {
+    mostrar(alumno.nombre, "sacó", alumno.nota)
+}
+mostrar("Aprobaron:", longitud(aprobados(curso)))
+mostrar(curso[0])

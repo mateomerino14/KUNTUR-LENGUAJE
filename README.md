@@ -117,3 +117,8 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 | 2 | Tipos (`entero`, `decimal`, `texto`, `logico`, `lista de ...`), análisis semántico y errores antes de ejecutar | Terminada |
 | 3 | Compilación a WebAssembly | Terminada |
 | 4 | Playground web con visualización de tokens, árbol, WebAssembly y ejecución paso a paso | Terminada |
+| 5 | Ejecutable `.wasm` independiente con WASI | Terminada |
+| 6 | Ejercicios con corrección automática | Terminada |
+| 7 | `para cada`, diccionarios y registros | Terminada |
+| 8 | Modo quechua | Pendiente |
+| 9 | Extensión para VS Code | Pendiente |
