@@ -1,21 +1,36 @@
-import {readdirSync, readFileSync} from 'node:fs';
+import {existsSync, readdirSync, readFileSync} from 'node:fs';
 import {describe, expect, test} from 'vitest';
-import {compile, run, runCompiled, type RunResult} from '../../src/index.js';
+import {compile, run, runCompiled, type ReadLine, type RunResult} from '../../src/index.js';
 
 const examplesDirectory = 'ejemplos';
 const fixedRandom = (): number => 0.5;
 const smallStepLimit = 10_000;
 
-// Ejecuta el programa en el intérprete y compilado, y devuelve ambos resultados
-const runBoth = async (source: string, maxSteps?: number): Promise<[RunResult, RunResult]> => {
-  const interpreted = run(source, {random: fixedRandom, maxSteps});
-  const compiled = await runCompiled(source, {random: fixedRandom, maxSteps});
+// Fuente de entrada que entrega las líneas indicadas en orden
+const linesReader = (lines: string[]): ReadLine => {
+  const pending = [...lines];
+  return () => pending.shift() ?? null;
+};
+
+// Ejecuta el programa en el intérprete y compilado, con la misma entrada, y devuelve ambos resultados
+const runBoth = async (source: string, maxSteps?: number, input: string[] = []): Promise<[RunResult, RunResult]> => {
+  const interpreted = run(source, {random: fixedRandom, maxSteps, read: linesReader(input)});
+  const compiled = await runCompiled(source, {random: fixedRandom, maxSteps, read: linesReader(input)});
   return [interpreted, compiled];
 };
 
+// Lee la entrada de un ejemplo desde su archivo .entrada, si tiene
+const exampleInput = (file: string): string[] => {
+  const inputFile = `${examplesDirectory}/${file.replace(/\.kun$/, '.entrada')}`;
+  if (!existsSync(inputFile)) {
+    return [];
+  }
+  return readFileSync(inputFile, 'utf8').split('\n');
+};
+
 // Verifica que el programa compilado muestre lo mismo que el intérprete, sin errores
-const expectSameOutput = async (source: string): Promise<string[]> => {
-  const [interpreted, compiled] = await runBoth(source);
+const expectSameOutput = async (source: string, input: string[] = []): Promise<string[]> => {
+  const [interpreted, compiled] = await runBoth(source, undefined, input);
   expect(interpreted.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([]);
   expect(compiled).toEqual(interpreted);
   return compiled.output;
@@ -43,7 +58,7 @@ describe('ejemplos', () => {
 
   // Cada ejemplo muestra lo mismo interpretado y compilado
   test.each(examples)('%s muestra lo mismo compilado', async (file) => {
-    await expectSameOutput(readFileSync(`${examplesDirectory}/${file}`, 'utf8'));
+    await expectSameOutput(readFileSync(`${examplesDirectory}/${file}`, 'utf8'), exampleInput(file));
   });
 
   // Cada ejemplo produce un binario válido y su texto
@@ -148,6 +163,15 @@ describe('equivalencia con el intérprete', () => {
   // Un texto vacío no se confunde con el texto que le sigue en la memoria
   test('distingue el texto vacío del texto siguiente', async () => {
     expect(await expectSameOutput('var vacio = ""\nvar nombre = "Ana"\nmostrar(vacio == "", nombre, longitud(vacio))')).toEqual(['verdadero Ana 0']);
+  });
+
+  // `leer` entrega las mismas líneas compiladas, y falla igual al acabarse la entrada
+  test('lee la entrada igual', async () => {
+    const source = 'var nombre = leer("Nombre: ")\nvar edad = numero(leer("Edad: "))\nmostrar(nombre, edad + 1, leer("") == "")';
+    expect(await expectSameOutput(source, ['Ana', '20', ''])).toEqual(['Ana 21 verdadero']);
+    const [interpreted, compiled] = await runBoth('var a = leer("a")\nvar b = leer("b")', undefined, ['1']);
+    expect(compiled).toEqual(interpreted);
+    expect(compiled.diagnostics[0].message).toContain('ya no hay más datos de entrada');
   });
 
   // Una función que muestra algo puede llamarse dentro de otro `mostrar`
