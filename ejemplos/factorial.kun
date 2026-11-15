@@ -1,0 +1,20 @@
+// Factorial con recursión y con un ciclo
+
+funcion factorial(n: entero): entero {
+    si n <= 1 {
+        retornar 1
+    }
+    retornar n * factorial(n - 1)
+}
+
+funcion factorialIterativo(n: entero): entero {
+    var resultado = 1
+    para i desde 2 hasta n {
+        resultado = resultado * i
+    }
+    retornar resultado
+}
+
+para n desde 0 hasta 10 {
+    mostrar(texto(n) + "! =", factorial(n), factorialIterativo(n))
+}

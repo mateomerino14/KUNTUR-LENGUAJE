@@ -1,0 +1,5 @@
+// Este programa tiene un error a propósito, para ver el mensaje
+
+var edad = 20
+var mensaje = "Tienes " + edda + " años"
+mostrar(mensaje)

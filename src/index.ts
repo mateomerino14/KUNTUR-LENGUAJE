@@ -1,0 +1,57 @@
+import type {Diagnostic} from './errors/diagnostic.js';
+import {interpret} from './interpreter/interpreter.js';
+import {tokenize} from './lexer/lexer.js';
+import type {Program} from './parser/ast.js';
+import {parseTokens} from './parser/parser.js';
+
+export {formatDiagnostic} from './errors/diagnostic.js';
+export type {Diagnostic, Position, Stage} from './errors/diagnostic.js';
+export {tokenize} from './lexer/lexer.js';
+export {TokenType} from './lexer/token.js';
+export type {Token} from './lexer/token.js';
+export type * from './parser/ast.js';
+export {printExpression} from './parser/printer.js';
+
+export interface ParseSourceResult {
+  program: Program | null;
+  diagnostics: Diagnostic[];
+}
+
+export interface RunOptions {
+  write?: (line: string) => void;
+  maxSteps?: number;
+  random?: () => number;
+}
+
+export interface RunResult {
+  output: string[];
+  diagnostics: Diagnostic[];
+}
+
+// Analiza el código fuente hasta el árbol de sintaxis; si hay errores léxicos no sigue al parser
+export const parse = (source: string): ParseSourceResult => {
+  const lexed = tokenize(source);
+  if (lexed.diagnostics.length > 0) {
+    return {program: null, diagnostics: lexed.diagnostics};
+  }
+  const parsed = parseTokens(lexed.tokens);
+  if (parsed.diagnostics.length > 0) {
+    return {program: null, diagnostics: parsed.diagnostics};
+  }
+  return {program: parsed.program, diagnostics: []};
+};
+
+// Analiza y ejecuta el código fuente, devolviendo lo mostrado y los errores
+export const run = (source: string, options: RunOptions = {}): RunResult => {
+  const output: string[] = [];
+  const parsed = parse(source);
+  if (parsed.program === null) {
+    return {output, diagnostics: parsed.diagnostics};
+  }
+  const write = (line: string): void => {
+    output.push(line);
+    options.write?.(line);
+  };
+  const result = interpret(parsed.program, {write, maxSteps: options.maxSteps, random: options.random});
+  return {output, diagnostics: result.diagnostics};
+};
