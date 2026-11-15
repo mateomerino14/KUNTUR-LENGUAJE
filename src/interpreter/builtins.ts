@@ -1,5 +1,11 @@
 import type {Position} from '../errors/diagnostic.js';
-import {noMoreInputMessage} from '../errors/messages.js';
+import {
+  emptyListPopMessage,
+  invalidNumberMessage,
+  negativeRootMessage,
+  noMoreInputMessage,
+  reversedRandomMessage,
+} from '../errors/messages.js';
 import {RuntimeError} from './runtimeError.js';
 import {describeType, stringify, stringifyLiteral, typeName, type NativeFunction, type Value} from './values.js';
 
@@ -81,7 +87,7 @@ const removeLastFunction: NativeFunction = {
   call: ([list], position) => {
     const items = expectList('quitar', list, position);
     if (items.length === 0) {
-      throw new RuntimeError('No se puede quitar un elemento de una lista vacía.', position);
+      throw new RuntimeError(emptyListPopMessage, position);
     }
     return items.pop()!;
   },
@@ -105,7 +111,7 @@ const toNumberFunction: NativeFunction = {
     if (typeof value === 'string' && numberPattern.test(value.trim())) {
       return Number(value.trim());
     }
-    throw new RuntimeError(`No se puede convertir ${stringifyLiteral(value)} en número.`, position);
+    throw new RuntimeError(invalidNumberMessage(stringifyLiteral(value)), position);
   },
 };
 
@@ -130,7 +136,7 @@ const squareRootFunction: NativeFunction = {
   call: ([value], position) => {
     const number = expectNumber('raiz', value, position);
     if (number < 0) {
-      throw new RuntimeError(`No existe la raíz cuadrada de un número negativo (${number}).`, position);
+      throw new RuntimeError(negativeRootMessage(String(number)), position);
     }
     return Math.sqrt(number);
   },
@@ -145,7 +151,7 @@ const createRandom = (random: () => number): NativeFunction => ({
     const low = expectInteger('aleatorio', min, position);
     const high = expectInteger('aleatorio', max, position);
     if (low > high) {
-      throw new RuntimeError(`\`aleatorio\` necesita el menor primero: \`aleatorio(${high}, ${low})\`.`, position);
+      throw new RuntimeError(reversedRandomMessage(String(high), String(low)), position);
     }
     return low + Math.floor(random() * (high - low + 1));
   },

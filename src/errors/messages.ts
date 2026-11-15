@@ -52,3 +52,29 @@ export const tooDeepMessage = (name?: string): string => {
   }
   return `Hay demasiadas llamadas anidadas a ${subject}. ¿Se llama a sí misma sin una condición que la detenga?`;
 };
+
+// Los mensajes siguientes reciben sus partes variables ya escritas como texto, para poder armarlos también desde WebAssembly
+
+// Explica que una posición no existe porque no hay elementos
+export const emptyIndexMessage = (index: string): string => `La posición ${index} no existe: no hay ningún elemento.`;
+
+// Explica que una posición está fuera del rango de la lista o del texto
+export const indexOutOfRangeMessage = (index: string, length: string, last: string): string => {
+  return `La posición ${index} no existe: hay ${length} elementos, en las posiciones 0 a ${last}.`;
+};
+
+export const emptyListPopMessage = 'No se puede quitar un elemento de una lista vacía.';
+
+// Explica que un texto no tiene forma de número; el texto llega entre comillas
+export const invalidNumberMessage = (quotedText: string): string => `No se puede convertir ${quotedText} en número.`;
+
+// Explica que no hay raíz cuadrada de un número negativo
+export const negativeRootMessage = (number: string): string => `No existe la raíz cuadrada de un número negativo (${number}).`;
+
+// Explica que `aleatorio` recibió los límites al revés
+export const reversedRandomMessage = (high: string, low: string): string => {
+  return `\`aleatorio\` necesita el menor primero: \`aleatorio(${high}, ${low})\`.`;
+};
+
+// Explica que se leyó un nombre que todavía no existe
+export const notDeclaredMessage = (name: string): string => `\`${name}\` no existe.`;

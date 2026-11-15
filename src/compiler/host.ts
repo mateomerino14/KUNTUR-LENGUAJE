@@ -1,6 +1,7 @@
 import type {Position} from '../errors/diagnostic.js';
 import {
   divisionByZeroMessage,
+  notDeclaredMessage,
   tooDeepMessage,
   tooManyStepsMessage,
   undeclaredAssignmentMessage,
@@ -161,7 +162,7 @@ export const createHostFunctions = (options: HostOptions): Record<HostFunctionNa
       throw new RuntimeError(tooDeepMessage(name), at(line, column));
     },
     fail_not_declared: (name: string, line: number, column: number) => {
-      throw new RuntimeError(`\`${name}\` no existe.`, at(line, column));
+      throw new RuntimeError(notDeclaredMessage(name), at(line, column));
     },
     fail_assign_not_declared: (name: string, line: number, column: number) => {
       throw new RuntimeError(undeclaredAssignmentMessage(name), at(line, column));
