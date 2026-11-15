@@ -1,4 +1,5 @@
 import type {Position} from '../errors/diagnostic.js';
+import {emptyIndexMessage, indexOutOfRangeMessage} from '../errors/messages.js';
 import {RuntimeError} from './runtimeError.js';
 import {describeType, type Value} from './values.js';
 
@@ -19,13 +20,10 @@ export const checkIndex = (index: Value, length: number, position: Position): nu
     );
   }
   if (length === 0) {
-    throw new RuntimeError(`La posición ${index} no existe: no hay ningún elemento.`, position);
+    throw new RuntimeError(emptyIndexMessage(String(index)), position);
   }
   if (index < 0 || index >= length) {
-    throw new RuntimeError(
-      `La posición ${index} no existe: hay ${length} elementos, en las posiciones 0 a ${length - 1}.`,
-      position,
-    );
+    throw new RuntimeError(indexOutOfRangeMessage(String(index), String(length), String(length - 1)), position);
   }
   return index;
 };

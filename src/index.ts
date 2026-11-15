@@ -1,5 +1,5 @@
 import {checkProgram, type TypeInfo} from './checker/checker.js';
-import {compileProgram} from './compiler/codegen.js';
+import {compileProgram, type CompileTarget} from './compiler/codegen.js';
 import {runWasm} from './compiler/runner.js';
 import {encodeModule} from './compiler/wasm/module.js';
 import {moduleToText} from './compiler/wasm/text.js';
@@ -13,6 +13,7 @@ import {parseTokens} from './parser/parser.js';
 
 export {formatDiagnostic} from './errors/diagnostic.js';
 export {noMoreInputMessage} from './errors/messages.js';
+export type {CompileTarget} from './compiler/codegen.js';
 export type {Diagnostic, Position, Stage} from './errors/diagnostic.js';
 export {tokenize} from './lexer/lexer.js';
 export {TokenType} from './lexer/token.js';
@@ -38,6 +39,7 @@ export interface CheckSourceResult {
 
 export interface CompileSourceOptions {
   maxSteps?: number;
+  target?: CompileTarget;
 }
 
 export interface CompileSourceResult {
