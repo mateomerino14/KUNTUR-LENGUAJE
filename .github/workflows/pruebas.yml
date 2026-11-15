@@ -6,7 +6,7 @@ on:
 
 jobs:
   pruebas:
-    name: Lint, tipos y pruebas
+    name: Lint, tipos, pruebas y playground
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -18,3 +18,4 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test -- --reporter=default --reporter=github-actions
+      - run: npm run playground:build
