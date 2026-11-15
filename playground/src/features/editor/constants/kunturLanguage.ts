@@ -30,6 +30,9 @@ const wordStyle = (word: string, stream: StringStream, state: KunturState): stri
   if (word === 'para') {
     state.forEach = 'afterFor';
   }
+  if (word === 'registro' && stream.match(/^\s+[\p{L}_]/u, false)) {
+    return 'keyword';
+  }
   if (keywords.has(word)) {
     state.afterColon = false;
     return 'keyword';
