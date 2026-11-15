@@ -1,9 +1,9 @@
 import {Button} from './components/ui/Button';
 import {SegmentedControl} from './components/ui/SegmentedControl';
 import {Tabs} from './components/ui/Tabs';
-import {EXAMPLES} from './constants/examples';
 import {TABS} from './constants/tabs';
 import {CodeEditor} from './features/editor/organisms/CodeEditor';
+import {ExamplePicker} from './features/examples/organisms/ExamplePicker';
 import {OutputPanel} from './features/output/organisms/OutputPanel';
 import {PipelineBand} from './features/pipeline/organisms/PipelineBand';
 import {StepperPanel} from './features/stepper/organisms/StepperPanel';
@@ -25,8 +25,6 @@ const styles = {
   title: 'text-[28px] leading-none font-bold tracking-tight',
   tagline: 'text-[15px] text-ink-muted mt-1',
   actions: 'flex flex-wrap items-center gap-3',
-  selectLabel: 'flex items-center gap-2 text-[15px] text-ink-muted',
-  select: 'bg-paper border border-line rounded-md px-3 py-2 text-ink text-[15px] cursor-pointer',
   shareMessage: 'text-[14px] text-teal font-bold',
   shortcut: 'font-normal text-[13px] opacity-80',
   main: 'flex-1 min-h-0 grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]',
@@ -45,13 +43,7 @@ export const App = () => {
           <p className={styles.tagline}>Un lenguaje de programación en español, y lo que pasa por dentro</p>
         </div>
         <div className={styles.actions}>
-          <label className={styles.selectLabel}>
-            Ejemplo
-            <select className={styles.select} value={playground.exampleId} onChange={(event) => playground.selectExample(event.target.value)}>
-              {playground.exampleId === playground.customExampleId && <option value={playground.customExampleId}>Tu programa</option>}
-              {EXAMPLES.map((example) => <option key={example.id} value={example.id}>{example.name}</option>)}
-            </select>
-          </label>
+          <ExamplePicker value={playground.exampleId} onSelect={playground.selectExample} />
           <SegmentedControl label="Cómo ejecutar" options={modeOptions} value={playground.mode} onChange={playground.changeMode} />
           {playground.shareMessage && <span className={styles.shareMessage} role="status">{playground.shareMessage}</span>}
           <Button onClick={playground.share}>Compartir</Button>
