@@ -1,6 +1,7 @@
 import {Button} from '../../../components/ui/Button';
 import {MAX_TRACE_STEPS} from '../../../constants/limits';
 import type {Execution} from '../../../hooks/useExecution';
+import {Transcript} from '../../output/molecules/Transcript';
 import {VariableList} from '../molecules/VariableList';
 
 interface StepperPanelProps {
@@ -23,7 +24,6 @@ const styles = {
   stack: 'flex flex-wrap gap-2',
   frame: 'px-3 py-1 rounded-md border border-line bg-paper font-mono text-[14px]',
   currentFrame: 'px-3 py-1 rounded-md bg-ink text-paper font-mono text-[14px] font-bold',
-  output: 'font-mono text-[14px] leading-[1.6] whitespace-pre-wrap bg-paper border border-line rounded-md px-3 py-2 min-h-[2.5rem]',
   variables: 'grid gap-4 sm:grid-cols-2',
 };
 
@@ -42,7 +42,7 @@ export const StepperPanel = ({execution, stepIndex, onStepChange, onRunStepper, 
   }
   const step = execution.trace[stepIndex];
   const last = execution.trace.length - 1;
-  const outputSoFar = execution.output.slice(0, step.outputLength);
+  const transcriptSoFar = execution.transcript.slice(0, step.transcriptLength);
   const stack = step.snapshot.callStack;
   return (
     <section className={styles.panel}>
@@ -77,7 +77,7 @@ export const StepperPanel = ({execution, stepIndex, onStepChange, onRunStepper, 
       </div>
       <div className={styles.section}>
         <h3 className={styles.title}>Lo mostrado hasta aquí</h3>
-        <pre className={styles.output}>{outputSoFar.join('\n')}</pre>
+        <Transcript entries={transcriptSoFar} />
       </div>
     </section>
   );
