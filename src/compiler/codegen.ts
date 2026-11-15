@@ -1,5 +1,5 @@
 import type {TypeInfo} from '../checker/checker.js';
-import {unknownType, type FunctionType, type Type} from '../checker/types.js';
+import {unknownType, type FunctionType, type RecordType, type Type} from '../checker/types.js';
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
 import {defaultMaxCallDepth, defaultMaxSteps} from '../interpreter/interpreter.js';
 import type {
@@ -177,6 +177,8 @@ const valueTypeOf = (type: Type, referenceType: ValueType): ValueType | null => 
     case 'boolean':
       return 'i32';
     case 'text':
+      return referenceType;
+    case 'record':
       return referenceType;
     case 'list':
     case 'dict':
@@ -513,6 +515,8 @@ class CodeGenerator {
       case 'VarDeclaration':
         this.compileVarDeclaration(statement, scope, topLevel);
         return;
+      case 'RecordDeclaration':
+        return;
       case 'FunctionDeclaration':
         if (!topLevel) {
           this.report(
@@ -801,6 +805,11 @@ class CodeGenerator {
         return this.compileList(expression.elements, this.typeOf(expression), scope, expression.position);
       case 'DictLiteral':
         return this.compileDict(expression, scope);
+      case 'Field':
+        this.compileValue(expression.target, scope);
+        this.emitText(expression.name);
+        this.callHost('record_get');
+        return this.emitUnbox(this.typeOf(expression));
       case 'Variable':
         return this.compileVariable(expression.name, scope, expression.position);
       case 'Assign':
@@ -906,6 +915,18 @@ class CodeGenerator {
   // Asigna un valor y lo deja en la pila, porque la asignación también es una expresión
   private compileAssign(expression: Assign, scope: CompileScope): ValueType {
     const target = expression.target;
+    if (target.kind === 'Field') {
+      const valueType = this.compileValue(expression.value, scope);
+      const value = this.addLocal('valor_asignado', valueType);
+      this.emit({op: 'local.set', index: value});
+      this.compileValue(target.target, scope);
+      this.emitText(target.name);
+      this.emit({op: 'local.get', index: value});
+      this.emitBox(this.typeOf(target));
+      this.callHost('record_set');
+      this.emit({op: 'local.get', index: value});
+      return valueType;
+    }
     if (target.kind === 'Index') {
       const valueType = this.compileValue(expression.value, scope);
       const value = this.addLocal('valor_asignado', valueType);
@@ -1099,6 +1120,10 @@ class CodeGenerator {
       this.report('Solo se pueden llamar funciones por su nombre al compilar a WebAssembly.', expression.position);
       return 'f64';
     }
+    const record = this.types.records.get(expression.callee.name);
+    if (record !== undefined && scope.lookup(expression.callee.name) === undefined) {
+      return this.compileRecordNew(record, expression, scope);
+    }
     const binding = scope.lookup(expression.callee.name);
     if (binding === undefined) {
       return this.compileBuiltinCall(expression.callee.name, expression, scope);
@@ -1114,6 +1139,23 @@ class CodeGenerator {
     this.callDefined(binding.index);
     this.callDefined(this.exitCallHelper);
     return binding.returns;
+  }
+
+  // Crea un registro con su nombre y guarda cada argumento en su campo
+  private compileRecordNew(record: RecordType, expression: Call, scope: CompileScope): ValueType {
+    const value = this.addLocal('registro_nuevo', this.refType);
+    this.emitText(record.name);
+    this.callHost('record_new');
+    this.emit({op: 'local.set', index: value});
+    record.fields.forEach((field, index) => {
+      this.emit({op: 'local.get', index: value});
+      this.emitText(field.name);
+      this.compileValue(expression.args[index], scope);
+      this.emitBox(field.type);
+      this.callHost('record_set');
+    });
+    this.emit({op: 'local.get', index: value});
+    return this.refType;
   }
 
   // Compila una llamada a una función propia del lenguaje
@@ -1161,7 +1203,7 @@ class CodeGenerator {
       case 'tipo':
         this.compileValue(args[0], scope);
         this.emit(op('drop'));
-        this.emitText(runtimeTypeNames[this.typeOf(args[0]).kind]);
+        this.emitText(this.runtimeTypeName(this.typeOf(args[0])));
         return this.refType;
       case 'redondear':
         this.compileValue(args[0], scope);
@@ -1186,6 +1228,14 @@ class CodeGenerator {
       default:
         return 'f64';
     }
+  }
+
+  // Nombre que devuelve `tipo()`: el del registro o el de la clase de valor
+  private runtimeTypeName(type: Type): string {
+    if (type.kind === 'record') {
+      return type.name;
+    }
+    return runtimeTypeNames[type.kind];
   }
 
   // Convierte un texto en número; si ya es número lo deja igual

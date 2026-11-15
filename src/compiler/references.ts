@@ -9,6 +9,9 @@ const collectFromExpression = (expression: Expression, names: Set<string>): void
     case 'ListLiteral':
       expression.elements.forEach((element) => collectFromExpression(element, names));
       return;
+    case 'Field':
+      collectFromExpression(expression.target, names);
+      return;
     case 'DictLiteral':
       expression.entries.forEach((entry) => {
         collectFromExpression(entry.key, names);

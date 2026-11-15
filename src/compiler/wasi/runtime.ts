@@ -36,6 +36,7 @@ export const TAGS = {
   list: 3,
   boolean: 4,
   dict: 5,
+  record: 6,
 } as const;
 
 export const TEXT_HEADER_SIZE = 8;
@@ -374,7 +375,11 @@ const coreFunctions: RuntimeFunction[] = [
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $next)))
     (i32.const 1)`),
-  fn('dict_to_text', '$d i32', 'i32', '$keys i32, $parts i32, $i i32', `
+  fn('dict_to_text', '$d i32', 'i32', '', `
+    (call $text_concat
+      (call $text_concat (text.const "{") (call $entries_to_text (local.get $d) (i32.const 1)))
+      (text.const "}"))`),
+  fn('entries_to_text', '$d i32, $quote i32', 'i32', '$keys i32, $parts i32, $i i32, $key i32', `
     (local.set $keys (i32.load offset=4 (local.get $d)))
     (local.set $parts (call $list_new))
     (block $done
@@ -382,13 +387,31 @@ const coreFunctions: RuntimeFunction[] = [
         (br_if $done (i32.ge_u (local.get $i) (i32.load offset=4 (local.get $keys))))
         (call $list_push (local.get $parts)
           (call $text_concat
-            (call $text_concat (call $json_quote (call $list_item (local.get $keys) (local.get $i))) (text.const ": "))
+            (call $text_concat
+              (select (call $json_quote (local.tee $key (call $list_item (local.get $keys) (local.get $i)))) (local.get $key) (local.get $quote))
+              (text.const ": "))
             (call $stringify (call $list_item (i32.load offset=8 (local.get $d)) (local.get $i)) (i32.const 1))))
         (local.set $i (i32.add (local.get $i) (i32.const 1)))
         (br $next)))
+    (call $join (local.get $parts) (text.const ", "))`),
+
+  // Registros: como un diccionario cuyas claves son los campos, más el nombre del registro
+  fn('record_new', '$name i32', 'i32', '$r i32', `
+    (local.set $r (call $alloc (i32.const 16)))
+    (i32.store (local.get $r) (i32.const ${TAGS.record}))
+    (i32.store offset=4 (local.get $r) (call $list_new))
+    (i32.store offset=8 (local.get $r) (call $list_new))
+    (i32.store offset=12 (local.get $r) (local.get $name))
+    (local.get $r)`),
+  fn('record_get', '$r i32, $field i32', 'i32', '', `
+    (call $list_item (i32.load offset=8 (local.get $r)) (call $dict_find (local.get $r) (local.get $field)))`),
+  fn('record_set', '$r i32, $field i32, $value i32', '', '', '(call $dict_set (local.get $r) (local.get $field) (local.get $value))'),
+  fn('record_to_text', '$r i32', 'i32', '', `
     (call $text_concat
-      (call $text_concat (text.const "{") (call $join (local.get $parts) (text.const ", ")))
-      (text.const "}"))`),
+      (call $text_concat
+        (call $text_concat (i32.load offset=12 (local.get $r)) (text.const "("))
+        (call $entries_to_text (local.get $r) (i32.const 0)))
+      (text.const ")"))`),
 
   // Cajas: los números van en un objeto propio y los valores lógicos son dos objetos fijos
   fn('box_number', '$x f64', 'i32', '$p i32', `
@@ -413,6 +436,10 @@ const coreFunctions: RuntimeFunction[] = [
       (then (return (i32.eq (i32.load offset=4 (local.get $a)) (i32.load offset=4 (local.get $b))))))
     (if (i32.eq (local.get $tag) (i32.const ${TAGS.dict}))
       (then (return (call $dict_equal (local.get $a) (local.get $b)))))
+    (if (i32.eq (local.get $tag) (i32.const ${TAGS.record}))
+      (then (return (i32.and
+        (i32.eqz (call $text_compare (i32.load offset=12 (local.get $a)) (i32.load offset=12 (local.get $b))))
+        (call $dict_equal (local.get $a) (local.get $b))))))
     (local.set $len (i32.load offset=4 (local.get $a)))
     (if (i32.ne (local.get $len) (i32.load offset=4 (local.get $b))) (then (return (i32.const 0))))
     (block $done
@@ -437,6 +464,8 @@ const coreFunctions: RuntimeFunction[] = [
       (then (return (call $bool_to_text (i32.load offset=4 (local.get $obj))))))
     (if (i32.eq (local.get $tag) (i32.const ${TAGS.dict}))
       (then (return (call $dict_to_text (local.get $obj)))))
+    (if (i32.eq (local.get $tag) (i32.const ${TAGS.record}))
+      (then (return (call $record_to_text (local.get $obj)))))
     (local.set $parts (call $list_new))
     (block $done
       (loop $next

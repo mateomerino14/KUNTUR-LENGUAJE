@@ -10,7 +10,7 @@ import {
 import {createBuiltins, type ReadLine} from '../interpreter/builtins.js';
 import {checkIndex, readKey} from '../interpreter/indexing.js';
 import {RuntimeError} from '../interpreter/runtimeError.js';
-import {stringify, valuesEqual, type Dict, type NativeFunction, type Value} from '../interpreter/values.js';
+import {stringify, valuesEqual, type Dict, type NativeFunction, type RecordValue, type Value} from '../interpreter/values.js';
 import type {FunctionSignature} from './wasm/module.js';
 
 export const hostModuleName = 'kuntur';
@@ -44,6 +44,9 @@ export const hostSignatures = {
   dict_set: {params: [ext, ext, ext], results: []},
   dict_has: {params: [ext, ext], results: ['i32']},
   dict_keys: {params: [ext], results: [ext]},
+  record_new: {params: [ext], results: [ext]},
+  record_get: {params: [ext, ext], results: [ext]},
+  record_set: {params: [ext, ext, ext], results: []},
   box_number: {params: ['f64'], results: [ext]},
   unbox_number: {params: [ext], results: ['f64']},
   box_bool: {params: ['i32'], results: [ext]},
@@ -154,6 +157,11 @@ export const createHostFunctions = (options: HostOptions): Record<HostFunctionNa
     },
     dict_has: (dict: Dict, key: string) => toFlag(dict.has(key)),
     dict_keys: (dict: Dict) => [...dict.keys()],
+    record_new: (name: string): RecordValue => ({kind: 'record', name, fields: new Map()}),
+    record_get: (record: RecordValue, field: string) => record.fields.get(field)!,
+    record_set: (record: RecordValue, field: string, value: Value) => {
+      record.fields.set(field, value);
+    },
     box_number: (value: number) => value,
     unbox_number: (value: number) => value,
     box_bool: (value: number) => value !== 0,
