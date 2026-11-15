@@ -1,4 +1,5 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
+import {constantTailLength, localizeMessage, QUECHUA_WORDS, type Language} from '../language/quechua.js';
 import {keywords, statementEnders, TokenType, type Token} from './token.js';
 
 export interface LexResult {
@@ -58,9 +59,11 @@ class Lexer {
   private groupDepth = 0;
   private tokenStart: Position = {line: 1, column: 1};
   private tokenStartIndex = 0;
+  private readonly language: Language;
 
-  constructor(source: string) {
+  constructor(source: string, language: Language) {
     this.source = source;
+    this.language = language;
   }
 
   // Recorre todo el código fuente y devuelve los tokens con los errores encontrados
@@ -178,16 +181,29 @@ class Lexer {
 
   // Lee un identificador o una palabra clave del lenguaje
   private scanIdentifier(): void {
-    while (isIdentifierPart(this.peek())) {
+    while (isIdentifierPart(this.peek()) || this.isQuechuaApostrophe()) {
       this.advance();
     }
-    const keywordType = keywords.get(this.currentLexeme());
-    if (keywordType === undefined) {
-      this.addToken(TokenType.Identifier, null);
+    let word = this.currentLexeme();
+    let spelling: string | undefined;
+    if (this.language === 'qu') {
+      const tail = constantTailLength(word, this.source.slice(this.index, this.index + 16));
+      for (let consumed = 0; consumed < tail; consumed++) {
+        this.advance();
+      }
+      const quechua = this.currentLexeme().replace(/[ \t]+/, ' ');
+      if (QUECHUA_WORDS.has(quechua)) {
+        spelling = this.currentLexeme();
+        word = QUECHUA_WORDS.get(quechua)!;
+      }
     }
-    else {
-      this.addToken(keywordType, null);
-    }
+    const keywordType = keywords.get(word) ?? TokenType.Identifier;
+    this.addToken(keywordType, null, word, spelling);
+  }
+
+  // En quechua, el apóstrofo es parte de la palabra cuando está entre letras, como en `p'akiy`
+  private isQuechuaApostrophe(): boolean {
+    return this.language === 'qu' && (this.peek() === '\'' || this.peek() === '’') && isIdentifierStart(this.peekNext());
   }
 
   // Lee operadores y signos de puntuación, de uno o dos caracteres
@@ -239,14 +255,18 @@ class Lexer {
   }
 
   // Registra un token con el texto leído desde su inicio
-  private addToken(type: TokenType, literal: number | string | null): void {
+  private addToken(type: TokenType, literal: number | string | null, lexeme = this.currentLexeme(), original?: string): void {
     if (groupOpeners.has(type)) {
       this.groupDepth++;
     }
     if (groupClosers.has(type) && this.groupDepth > 0) {
       this.groupDepth--;
     }
-    this.tokens.push({type, lexeme: this.currentLexeme(), literal, position: {...this.tokenStart}});
+    const token: Token = {type, lexeme, literal, position: {...this.tokenStart}};
+    if (original !== undefined) {
+      token.original = original;
+    }
+    this.tokens.push(token);
   }
 
   // Registra un error en la posición donde empezó el token actual
@@ -256,7 +276,7 @@ class Lexer {
 
   // Registra un error en una posición concreta
   private reportAt(message: string, position: Position): void {
-    this.diagnostics.push(createDiagnostic('lexer', message, position));
+    this.diagnostics.push(createDiagnostic('lexer', localizeMessage(message, this.language), position));
   }
 
   // Guarda la posición de inicio del siguiente token
@@ -310,4 +330,4 @@ class Lexer {
 }
 
 // Convierte el código fuente en una lista de tokens
-export const tokenize = (source: string): LexResult => new Lexer(source).tokenize();
+export const tokenize = (source: string, language: Language = 'es'): LexResult => new Lexer(source, language).tokenize();

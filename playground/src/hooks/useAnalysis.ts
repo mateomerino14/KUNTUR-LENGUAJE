@@ -1,9 +1,10 @@
 import {useEffect, useState} from 'react';
-import {check, compile, parse, tokenize, type Diagnostic, type Program, type Token, type TypeInfo} from '../../../src/index.js';
+import {check, compile, parse, tokenize, type Diagnostic, type Language, type Program, type Token, type TypeInfo} from '../../../src/index.js';
 import {ANALYSIS_DELAY_MS} from '../constants/limits';
 
 export interface Analysis {
   source: string;
+  language: Language;
   tokens: Token[];
   lexerDiagnostics: Diagnostic[];
   program: Program | null;
@@ -16,10 +17,11 @@ export interface Analysis {
 }
 
 // Pasa el código por cada etapa y se detiene en la primera que falla, como lo hace `run`
-const analyze = (source: string): Analysis => {
-  const lexed = tokenize(source);
+const analyze = (source: string, language: Language): Analysis => {
+  const lexed = tokenize(source, language);
   const analysis: Analysis = {
     source,
+    language,
     tokens: lexed.tokens,
     lexerDiagnostics: lexed.diagnostics,
     program: null,
@@ -33,19 +35,19 @@ const analyze = (source: string): Analysis => {
   if (lexed.diagnostics.length > 0) {
     return analysis;
   }
-  const parsed = parse(source);
+  const parsed = parse(source, {language});
   analysis.program = parsed.program;
   analysis.parserDiagnostics = parsed.diagnostics;
   if (parsed.program === null) {
     return analysis;
   }
-  const checked = check(source);
+  const checked = check(source, {language});
   analysis.types = checked.types;
   analysis.semanticDiagnostics = checked.diagnostics;
   if (checked.program === null) {
     return analysis;
   }
-  const compiled = compile(source);
+  const compiled = compile(source, {language});
   analysis.wasmBinary = compiled.binary;
   analysis.wasmText = compiled.text;
   analysis.compilerDiagnostics = compiled.diagnostics;
@@ -63,16 +65,16 @@ export const blockingDiagnostics = (analysis: Analysis): Diagnostic[] => {
   return analysis.semanticDiagnostics;
 };
 
-export const useAnalysis = (source: string): Analysis => {
-  const [analysis, setAnalysis] = useState(() => analyze(source));
+export const useAnalysis = (source: string, language: Language = 'es'): Analysis => {
+  const [analysis, setAnalysis] = useState(() => analyze(source, language));
 
   useEffect(() => {
-    if (source === analysis.source) {
+    if (source === analysis.source && language === analysis.language) {
       return undefined;
     }
-    const timer = window.setTimeout(() => setAnalysis(analyze(source)), ANALYSIS_DELAY_MS);
+    const timer = window.setTimeout(() => setAnalysis(analyze(source, language)), ANALYSIS_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [source, analysis.source]);
+  }, [source, language, analysis.source, analysis.language]);
 
   return analysis;
 };

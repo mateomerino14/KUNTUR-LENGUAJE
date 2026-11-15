@@ -1,3 +1,4 @@
+import {LANGUAGES} from '../../../src/index.js';
 import {Button} from '../components/ui/Button';
 import {PageHeader, type Section} from '../layouts/PageHeader';
 import {SegmentedControl} from '../components/ui/SegmentedControl';
@@ -19,6 +20,8 @@ const modeOptions: {value: ExecutionMode; label: string}[] = [
   {value: 'wasm', label: 'WebAssembly'},
 ];
 
+const languageOptions = LANGUAGES.map((language) => ({value: language.id, label: language.label}));
+
 const styles = {
   page: 'min-h-screen flex flex-col lg:h-screen',
   shareMessage: 'text-[14px] text-teal font-bold',
@@ -39,6 +42,7 @@ export const ExplorePage = ({onSectionChange}: ExplorePageProps) => {
     <div className={styles.page}>
       <PageHeader section="explore" onSectionChange={onSectionChange}>
         <ExamplePicker value={playground.exampleId} onSelect={playground.selectExample} />
+        <SegmentedControl label="Idioma de las palabras del lenguaje" options={languageOptions} value={playground.language} onChange={playground.changeLanguage} />
         <SegmentedControl label="Cómo ejecutar" options={modeOptions} value={playground.mode} onChange={playground.changeMode} />
         {playground.shareMessage && <span className={styles.shareMessage} role="status">{playground.shareMessage}</span>}
         <Button onClick={playground.share}>Compartir</Button>
@@ -56,6 +60,7 @@ export const ExplorePage = ({onSectionChange}: ExplorePageProps) => {
             onRun={playground.runProgram}
             diagnostics={playground.editorDiagnostics}
             stepLine={playground.stepLine}
+            language={playground.language}
           />
         </div>
         <div className={styles.inspector}>
@@ -77,6 +82,7 @@ export const ExplorePage = ({onSectionChange}: ExplorePageProps) => {
               <TreePanel
                 program={playground.analysis.program}
                 types={playground.analysis.types}
+                language={playground.analysis.language}
                 diagnostics={playground.analysis.parserDiagnostics}
                 onSelectPosition={playground.selectPosition}
               />

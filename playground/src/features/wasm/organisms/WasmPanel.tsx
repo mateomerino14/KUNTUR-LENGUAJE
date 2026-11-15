@@ -55,8 +55,8 @@ export const WasmPanel = ({analysis, blocked, onSelectPosition}: WasmPanelProps)
     if (analysis.wasmBinary === null) {
       return null;
     }
-    return compile(analysis.source, {target: 'wasi'});
-  }, [analysis.source, analysis.wasmBinary]);
+    return compile(analysis.source, {target: 'wasi', language: analysis.language});
+  }, [analysis.source, analysis.language, analysis.wasmBinary]);
 
   if (blocked) {
     return (
