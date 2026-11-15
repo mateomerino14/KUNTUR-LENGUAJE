@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-import {readFileSync} from 'node:fs';
-import {formatDiagnostic, parse, run, tokenize, type Diagnostic} from './index.js';
+import {readFileSync, writeFileSync} from 'node:fs';
+import {compile, formatDiagnostic, parse, run, runCompiled, tokenize, type Diagnostic} from './index.js';
 
 const usage = [
   'Uso:',
   '  kuntur <archivo.kun>            Ejecuta el programa',
   '  kuntur --tokens <archivo.kun>   Muestra los tokens del analizador léxico',
   '  kuntur --arbol <archivo.kun>    Muestra el árbol de sintaxis',
+  '  kuntur --wasm <archivo.kun>     Compila a WebAssembly y ejecuta el resultado',
+  '  kuntur --wat <archivo.kun>      Muestra el WebAssembly generado, en formato de texto',
+  '  kuntur --compilar <archivo.kun> <salida.wasm>   Guarda el binario de WebAssembly',
 ].join('\n');
 
 const errorExitCode = 1;
@@ -65,6 +68,33 @@ const runFile = (source: string): void => {
   }
 };
 
+// Compila a WebAssembly y ejecuta el módulo, mostrando la salida a medida que se produce
+const runWasmFile = async (source: string): Promise<void> => {
+  const {diagnostics} = await runCompiled(source, {write: (line) => process.stdout.write(`${line}\n`)});
+  if (diagnostics.length > 0) {
+    reportAndExit(diagnostics, source);
+  }
+};
+
+// Imprime el módulo de WebAssembly en formato de texto
+const printWat = (source: string): void => {
+  const {text, diagnostics} = compile(source);
+  if (text === null) {
+    reportAndExit(diagnostics, source);
+  }
+  process.stdout.write(`${text}\n`);
+};
+
+// Guarda el binario de WebAssembly en el archivo indicado
+const writeWasm = (source: string, outputPath: string): void => {
+  const {binary, diagnostics} = compile(source);
+  if (binary === null) {
+    return reportAndExit(diagnostics, source);
+  }
+  writeFileSync(outputPath, binary);
+  process.stdout.write(`Se guardó \`${outputPath}\` (${binary.length} bytes).\n`);
+};
+
 // Termina sin error si quien lee la salida la cierra antes, por ejemplo con `| head`
 const exitOnClosedOutput = (error: NodeJS.ErrnoException): void => {
   if (error.code === 'EPIPE') {
@@ -74,7 +104,7 @@ const exitOnClosedOutput = (error: NodeJS.ErrnoException): void => {
 };
 
 // Interpreta los argumentos de la línea de comandos
-const main = (args: string[]): void => {
+const main = async (args: string[]): Promise<void> => {
   if (args.length === 1 && !args[0].startsWith('--')) {
     runFile(readSource(args[0]));
     return;
@@ -87,9 +117,21 @@ const main = (args: string[]): void => {
     printTree(readSource(args[1]));
     return;
   }
+  if (args.length === 2 && args[0] === '--wasm') {
+    await runWasmFile(readSource(args[1]));
+    return;
+  }
+  if (args.length === 2 && args[0] === '--wat') {
+    printWat(readSource(args[1]));
+    return;
+  }
+  if (args.length === 3 && args[0] === '--compilar') {
+    writeWasm(readSource(args[1]), args[2]);
+    return;
+  }
   process.stderr.write(`${usage}\n`);
   process.exit(errorExitCode);
 };
 
 process.stdout.on('error', exitOnClosedOutput);
-main(process.argv.slice(2));
+await main(process.argv.slice(2));
