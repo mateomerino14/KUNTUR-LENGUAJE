@@ -1,5 +1,5 @@
 import {describe, expect, test} from 'vitest';
-import {encodeF64, encodeSigned, encodeUnsigned} from '../../src/compiler/wasm/encoding.js';
+import {encodeF64, encodeSigned, encodeSigned64, encodeUnsigned} from '../../src/compiler/wasm/encoding.js';
 import {encodeModule, type WasmModule} from '../../src/compiler/wasm/module.js';
 import {moduleToText, watIdentifier} from '../../src/compiler/wasm/text.js';
 
@@ -24,6 +24,12 @@ describe('codificación', () => {
   // Los decimales ocupan 8 bytes en orden little-endian
   test('codifica números de 64 bits', () => {
     expect(encodeF64(1)).toEqual([0, 0, 0, 0, 0, 0, 0xf0, 0x3f]);
+  });
+
+  // Los enteros de 64 bits usan LEB128 con signo
+  test('codifica enteros de 64 bits', () => {
+    expect(encodeSigned64(-1n)).toEqual([0x7f]);
+    expect(encodeSigned64(9007199254740993n)).toEqual([0x81, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x10]);
   });
 
   // Los nombres con tildes se escriben con su código en WAT
@@ -66,6 +72,12 @@ describe('módulos', () => {
     const {instance} = await WebAssembly.instantiate(binary, {kuntur: {show: (value: number) => shown.push(value)}});
     (instance.exports.principal as () => void)();
     expect(shown).toEqual([42]);
+  });
+
+  // Los decimales especiales se escriben como los acepta WAT
+  test('escribe el infinito como inf', () => {
+    const text = moduleToText({...doubleModule, functions: [{...doubleModule.functions[0], body: [{op: 'f64.const', value: Infinity}]}]});
+    expect(text).toContain('f64.const inf');
   });
 
   // El texto usa los nombres de las funciones y de los parámetros
