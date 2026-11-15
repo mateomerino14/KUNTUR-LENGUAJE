@@ -6,7 +6,7 @@ import {StageStripe} from '../molecules/StageStripe';
 interface PipelineBandProps {
   reports: Record<StageId, StageReport>;
   weaveKey: number;
-  onSelectTab: (tab: TabId) => void;
+  onSelectTab?: (tab: TabId) => void;
 }
 
 const styles = {
@@ -22,7 +22,7 @@ export const PipelineBand = ({reports, weaveKey, onSelectTab}: PipelineBandProps
         report={reports[stage.id]}
         order={order}
         weaveKey={weaveKey}
-        onSelect={() => onSelectTab(stage.tab)}
+        onSelect={onSelectTab && (() => onSelectTab(stage.tab))}
       />
     ))}
   </nav>

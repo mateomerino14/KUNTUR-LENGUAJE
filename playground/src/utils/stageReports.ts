@@ -1,3 +1,4 @@
+import type {GradeResult} from '../../../src/index.js';
 import type {StageId, StageStatus} from '../features/pipeline/constants/stages';
 import type {Analysis} from '../hooks/useAnalysis';
 import type {Execution, ExecutionMode} from '../hooks/useExecution';
@@ -71,4 +72,20 @@ export const stageReports = (
     reports.wasm = {status: 'ok', summary: plural(analysis.wasmBinary.length, 'byte', 'bytes')};
   }
   return reports;
+};
+
+// Resume la corrección de un ejercicio en la etapa de ejecución de la franja
+export const gradeReport = (grade: GradeResult | null, gradeIsStale: boolean): StageReport => {
+  if (gradeIsStale) {
+    return {status: 'pending', summary: 'el código cambió'};
+  }
+  if (grade === null || grade.blocking.length > 0) {
+    return {status: 'pending', summary: 'sin comprobar'};
+  }
+  const passed = grade.results.filter((result) => result.outcome === 'passed').length;
+  const summary = `${passed} de ${plural(grade.results.length, 'caso', 'casos')}`;
+  if (grade.solved) {
+    return {status: 'ok', summary};
+  }
+  return {status: 'error', summary};
 };
