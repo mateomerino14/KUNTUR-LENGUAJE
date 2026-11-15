@@ -12,6 +12,7 @@ import type {Program} from './parser/ast.js';
 import {parseTokens} from './parser/parser.js';
 
 export {formatDiagnostic} from './errors/diagnostic.js';
+export {noMoreInputMessage} from './errors/messages.js';
 export type {Diagnostic, Position, Stage} from './errors/diagnostic.js';
 export {tokenize} from './lexer/lexer.js';
 export {TokenType} from './lexer/token.js';
