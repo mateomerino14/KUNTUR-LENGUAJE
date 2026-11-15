@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import {readFileSync, writeFileSync} from 'node:fs';
-import {compile, formatDiagnostic, parse, run, runCompiled, tokenize, type Diagnostic} from './index.js';
+import {compile, formatDiagnostic, parse, run, runCompiled, tokenize, type Diagnostic, type Language} from './index.js';
 import {createStdinReader} from './stdinReader.js';
 
 const usage = [
@@ -12,7 +12,21 @@ const usage = [
   '  kuntur --wat <archivo.kun>      Muestra el WebAssembly generado, en formato de texto',
   '  kuntur --wasi <archivo.kun>     Compila a un WebAssembly independiente (WASI) y lo ejecuta',
   '  kuntur --compilar <archivo.kun> <salida.wasm>   Guarda un WebAssembly independiente, que corre con wasmtime',
+  '',
+  'Agrega --runasimi a cualquier opción para escribir el programa con las palabras en quechua.',
 ].join('\n');
+
+const quechuaFlag = '--runasimi';
+
+// Idioma de las palabras del programa, según si se pidió el modo quechua
+const languageOf = (args: string[]): Language => {
+  if (args.includes(quechuaFlag)) {
+    return 'qu';
+  }
+  return 'es';
+};
+
+const language = languageOf(process.argv);
 
 const errorExitCode = 1;
 const jsonIndent = 2;
@@ -37,7 +51,7 @@ const reportAndExit = (diagnostics: Diagnostic[], source: string): never => {
 
 // Imprime cada token con su posición y su tipo
 const printTokens = (source: string): void => {
-  const {tokens, diagnostics} = tokenize(source);
+  const {tokens, diagnostics} = tokenize(source, language);
   for (const token of tokens) {
     const position = `${token.position.line}:${token.position.column}`.padEnd(8);
     process.stdout.write(`${position}${token.type.padEnd(14)}${JSON.stringify(token.lexeme)}\n`);
@@ -49,7 +63,7 @@ const printTokens = (source: string): void => {
 
 // Imprime el árbol de sintaxis sin las posiciones, para que se lea mejor
 const printTree = (source: string): void => {
-  const {program, diagnostics} = parse(source);
+  const {program, diagnostics} = parse(source, {language});
   if (program === null) {
     reportAndExit(diagnostics, source);
   }
@@ -64,7 +78,7 @@ const printTree = (source: string): void => {
 
 // Ejecuta el programa mostrando la salida a medida que se produce
 const runFile = (source: string): void => {
-  const {diagnostics} = run(source, {write: (line) => process.stdout.write(`${line}\n`), read: createStdinReader(process.stdout)});
+  const {diagnostics} = run(source, {language, write: (line) => process.stdout.write(`${line}\n`), read: createStdinReader(process.stdout)});
   if (diagnostics.length > 0) {
     reportAndExit(diagnostics, source);
   }
@@ -73,6 +87,7 @@ const runFile = (source: string): void => {
 // Compila a WebAssembly y ejecuta el módulo, mostrando la salida a medida que se produce
 const runWasmFile = async (source: string): Promise<void> => {
   const {diagnostics} = await runCompiled(source, {
+    language,
     write: (line) => process.stdout.write(`${line}\n`),
     read: createStdinReader(process.stdout),
   });
@@ -83,7 +98,7 @@ const runWasmFile = async (source: string): Promise<void> => {
 
 // Imprime el módulo de WebAssembly en formato de texto
 const printWat = (source: string): void => {
-  const {text, diagnostics} = compile(source);
+  const {text, diagnostics} = compile(source, {language});
   if (text === null) {
     reportAndExit(diagnostics, source);
   }
@@ -92,7 +107,7 @@ const printWat = (source: string): void => {
 
 // Guarda el WebAssembly independiente en el archivo indicado
 const writeWasm = (source: string, outputPath: string): void => {
-  const {binary, diagnostics} = compile(source, {target: 'wasi'});
+  const {binary, diagnostics} = compile(source, {target: 'wasi', language});
   if (binary === null) {
     return reportAndExit(diagnostics, source);
   }
@@ -102,7 +117,7 @@ const writeWasm = (source: string, outputPath: string): void => {
 
 // Compila a WebAssembly independiente y lo ejecuta con el WASI de Node, usando la terminal como entrada y salida
 const runWasiFile = async (source: string): Promise<void> => {
-  const {binary, diagnostics} = compile(source, {target: 'wasi'});
+  const {binary, diagnostics} = compile(source, {target: 'wasi', language});
   if (binary === null) {
     return reportAndExit(diagnostics, source);
   }
@@ -157,4 +172,4 @@ const main = async (args: string[]): Promise<void> => {
 };
 
 process.stdout.on('error', exitOnClosedOutput);
-await main(process.argv.slice(2));
+await main(process.argv.slice(2).filter((arg) => arg !== quechuaFlag));
