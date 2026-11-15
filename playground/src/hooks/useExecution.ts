@@ -1,5 +1,5 @@
 import {useCallback, useState} from 'react';
-import {run, runCompiled, type Diagnostic, type Position, type ReadLine, type StepSnapshot} from '../../../src/index.js';
+import {run, runCompiled, type Diagnostic, type Language, type Position, type ReadLine, type StepSnapshot} from '../../../src/index.js';
 import {MAX_EXECUTION_STEPS, MAX_TRACE_STEPS} from '../constants/limits';
 
 export type ExecutionMode = 'interpreter' | 'wasm';
@@ -60,11 +60,12 @@ const createConversation = (input: string): Conversation => {
 };
 
 // Ejecuta con el intérprete guardando los primeros pasos para recorrerlos después
-const interpretWithTrace = (source: string, input: string): Omit<Execution, 'durationMs'> => {
+const interpretWithTrace = (source: string, input: string, language: Language): Omit<Execution, 'durationMs'> => {
   const conversation = createConversation(input);
   const trace: TraceStep[] = [];
   let traceTruncated = false;
   const result = run(source, {
+    language,
     maxSteps: MAX_EXECUTION_STEPS,
     write: conversation.write,
     read: conversation.read,
@@ -80,9 +81,9 @@ const interpretWithTrace = (source: string, input: string): Omit<Execution, 'dur
 };
 
 // Compila a WebAssembly y ejecuta con la misma entrada
-const runAsWasm = async (source: string, input: string): Promise<Omit<Execution, 'durationMs'>> => {
+const runAsWasm = async (source: string, input: string, language: Language): Promise<Omit<Execution, 'durationMs'>> => {
   const conversation = createConversation(input);
-  const result = await runCompiled(source, {maxSteps: MAX_EXECUTION_STEPS, write: conversation.write, read: conversation.read});
+  const result = await runCompiled(source, {language, maxSteps: MAX_EXECUTION_STEPS, write: conversation.write, read: conversation.read});
   return {source, input, mode: 'wasm', transcript: conversation.transcript, diagnostics: result.diagnostics, trace: [], traceTruncated: false};
 };
 
@@ -91,16 +92,16 @@ export const useExecution = () => {
   const [execution, setExecution] = useState<Execution | null>(null);
   const [running, setRunning] = useState(false);
 
-  const execute = useCallback(async (source: string, input: string, requestedMode: ExecutionMode) => {
+  const execute = useCallback(async (source: string, input: string, requestedMode: ExecutionMode, language: Language) => {
     setRunning(true);
     const start = performance.now();
     try {
       let result: Omit<Execution, 'durationMs'>;
       if (requestedMode === 'interpreter') {
-        result = interpretWithTrace(source, input);
+        result = interpretWithTrace(source, input, language);
       }
       else {
-        result = await runAsWasm(source, input);
+        result = await runAsWasm(source, input, language);
       }
       setExecution({...result, durationMs: performance.now() - start});
     }
