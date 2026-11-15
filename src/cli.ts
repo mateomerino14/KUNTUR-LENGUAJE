@@ -10,7 +10,8 @@ const usage = [
   '  kuntur --arbol <archivo.kun>    Muestra el árbol de sintaxis',
   '  kuntur --wasm <archivo.kun>     Compila a WebAssembly y ejecuta el resultado',
   '  kuntur --wat <archivo.kun>      Muestra el WebAssembly generado, en formato de texto',
-  '  kuntur --compilar <archivo.kun> <salida.wasm>   Guarda el binario de WebAssembly',
+  '  kuntur --wasi <archivo.kun>     Compila a un WebAssembly independiente (WASI) y lo ejecuta',
+  '  kuntur --compilar <archivo.kun> <salida.wasm>   Guarda un WebAssembly independiente, que corre con wasmtime',
 ].join('\n');
 
 const errorExitCode = 1;
@@ -89,14 +90,28 @@ const printWat = (source: string): void => {
   process.stdout.write(`${text}\n`);
 };
 
-// Guarda el binario de WebAssembly en el archivo indicado
+// Guarda el WebAssembly independiente en el archivo indicado
 const writeWasm = (source: string, outputPath: string): void => {
-  const {binary, diagnostics} = compile(source);
+  const {binary, diagnostics} = compile(source, {target: 'wasi'});
   if (binary === null) {
     return reportAndExit(diagnostics, source);
   }
   writeFileSync(outputPath, binary);
-  process.stdout.write(`Se guardó \`${outputPath}\` (${binary.length} bytes).\n`);
+  process.stdout.write(`Se guardó \`${outputPath}\` (${binary.length} bytes). Ejecútalo con: wasmtime ${outputPath}\n`);
+};
+
+// Compila a WebAssembly independiente y lo ejecuta con el WASI de Node, usando la terminal como entrada y salida
+const runWasiFile = async (source: string): Promise<void> => {
+  const {binary, diagnostics} = compile(source, {target: 'wasi'});
+  if (binary === null) {
+    return reportAndExit(diagnostics, source);
+  }
+  // Node avisa que su WASI es experimental; el aviso no le sirve a quien ejecuta un programa
+  process.removeAllListeners('warning');
+  const {WASI} = await import('node:wasi');
+  const wasi = new WASI({version: 'preview1', returnOnExit: true});
+  const {instance} = await WebAssembly.instantiate(binary, wasi.getImportObject() as WebAssembly.Imports);
+  process.exitCode = wasi.start(instance);
 };
 
 // Termina sin error si quien lee la salida la cierra antes, por ejemplo con `| head`
@@ -123,6 +138,10 @@ const main = async (args: string[]): Promise<void> => {
   }
   if (args.length === 2 && args[0] === '--wasm') {
     await runWasmFile(readSource(args[1]));
+    return;
+  }
+  if (args.length === 2 && args[0] === '--wasi') {
+    await runWasiFile(readSource(args[1]));
     return;
   }
   if (args.length === 2 && args[0] === '--wat') {
