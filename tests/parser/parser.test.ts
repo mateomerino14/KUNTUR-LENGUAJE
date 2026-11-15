@@ -85,6 +85,16 @@ describe('sentencias', () => {
     expect(statement).toMatchObject({kind: 'VarDeclaration', name: 'edad', constant: false, typeAnnotation: {name: 'entero'}});
   });
 
+  // `lista de tipo` guarda el tipo de los elementos, también anidado
+  test('lee tipos de listas', () => {
+    expect(firstStatement('var notas: lista de entero = []')).toMatchObject({
+      typeAnnotation: {name: 'lista', element: {name: 'entero', element: null}},
+    });
+    expect(firstStatement('var matriz: lista de lista de decimal = []')).toMatchObject({
+      typeAnnotation: {name: 'lista', element: {name: 'lista', element: {name: 'decimal'}}},
+    });
+  });
+
   // Las constantes se marcan como tales
   test('lee constantes', () => {
     expect(firstStatement('constante PI = 3.14')).toMatchObject({kind: 'VarDeclaration', constant: true});
@@ -195,5 +205,13 @@ describe('errores de sintaxis', () => {
     const {program, diagnostics} = parseSource('funcion f() {\n  var = 1\n  retornar 2\n}\nf()');
     expect(diagnostics).toHaveLength(1);
     expect(program.statements.map((statement) => statement.kind)).toEqual(['FunctionDeclaration', 'ExpressionStatement']);
+  });
+});
+
+describe('números', () => {
+  // Un número escrito con punto se marca como decimal aunque su valor sea entero
+  test('distingue los números escritos con punto decimal', () => {
+    expect(expressionOf('2.0')).toMatchObject({kind: 'NumberLiteral', value: 2, decimal: true});
+    expect(expressionOf('2')).toMatchObject({kind: 'NumberLiteral', value: 2, decimal: false});
   });
 });

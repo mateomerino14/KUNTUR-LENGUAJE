@@ -1,0 +1,38 @@
+// Notas de un curso con tipos: Kuntur revisa todo antes de ejecutar
+
+constante NOTA_MINIMA: entero = 51
+
+funcion promedio(notas: lista de entero): decimal {
+    var suma = 0
+    para i desde 0 hasta longitud(notas) - 1 {
+        suma = suma + notas[i]
+    }
+    retornar suma / longitud(notas)
+}
+
+funcion estado(nota: decimal): texto {
+    si nota >= NOTA_MINIMA {
+        retornar "Aprobado"
+    }
+    sino si nota >= 40 {
+        retornar "Segunda instancia"
+    }
+    sino {
+        retornar "Reprobado"
+    }
+}
+
+var estudiantes: lista de texto = ["Ana", "Luis", "Rosa"]
+var notas: lista de lista de entero = [
+    [70, 85, 64],
+    [45, 38, 52],
+    [20, 41, 30],
+]
+
+para i desde 0 hasta longitud(estudiantes) - 1 {
+    var nota = promedio(notas[i])
+    mostrar(estudiantes[i] + ":", redondear(nota), "-", estado(nota))
+}
+
+// Prueba quitar el comentario de la línea siguiente para ver el error antes de ejecutar:
+// agregar(estudiantes, 42)

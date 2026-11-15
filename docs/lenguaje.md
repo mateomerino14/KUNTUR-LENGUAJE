@@ -1,6 +1,6 @@
 # Referencia del lenguaje Kuntur
 
-Kuntur es un lenguaje pequeño, con palabras clave en español. Esta referencia describe lo que funciona en la versión actual (fase 1: intérprete).
+Kuntur es un lenguaje pequeño, con palabras clave en español. Esta referencia describe lo que funciona en la versión actual (fase 3: compilación a WebAssembly). Los programas se pueden interpretar o [compilar a WebAssembly](webassembly.md).
 
 ## Estructura de un programa
 
@@ -30,7 +30,8 @@ Los comentarios empiezan con `//` y llegan hasta el final de la línea.
 
 | Tipo | Ejemplos |
 |---|---|
-| número | `42`, `3.14`, `-7` |
+| entero | `42`, `-7` |
+| decimal | `3.14`, `2.0` |
 | texto | `"hola"`, `"línea\nnueva"` |
 | lógico | `verdadero`, `falso` |
 | nulo | `nulo` |
@@ -50,7 +51,72 @@ constante PI = 3.1416
 - Antes de usar una variable hay que declararla con `var`.
 - Una constante necesita valor inicial y no se puede cambiar.
 - Los nombres pueden llevar tildes y `ñ`, pero no pueden empezar con un número.
-- Las anotaciones de tipo (`var edad: entero = 20`) se aceptan, pero todavía no se verifican; se verificarán en la fase 2.
+
+## Tipos
+
+Kuntur revisa los tipos **antes de ejecutar**: si hay un error, el programa no llega a correr y se muestran todos los errores juntos.
+
+| Tipo | Se escribe | Valor inicial de ejemplo |
+|---|---|---|
+| Entero | `entero` | `0` |
+| Decimal | `decimal` | `0.0` |
+| Texto | `texto` | `""` |
+| Lógico | `logico` o `lógico` | `falso` |
+| Lista | `lista de entero`, `lista de lista de texto`... | `[]` |
+
+### Tipos anotados y deducidos
+
+```
+var edad: entero = 20        // tipo anotado
+var nombre = "Ana"           // tipo deducido: texto
+var promedio = 0.0           // tipo deducido: decimal
+var notas = [70, 85]         // tipo deducido: lista de entero
+var x                        // sin tipo: acepta cualquier valor
+```
+
+- Si una variable no tiene anotación, toma el tipo de su valor inicial y lo conserva: después de `var nombre = "Ana"`, `nombre = 5` es un error.
+- Una variable con tipo anotado necesita un valor inicial.
+- `var x` sin valor inicial, o iniciada con `nulo`, no tiene tipo y acepta cualquier valor.
+
+### Enteros y decimales
+
+- Un número escrito con punto es decimal, aunque valga lo mismo que un entero: `2.0` es decimal.
+- Un entero se puede guardar donde se espera un decimal, pero no al revés: se perdería la parte decimal. Para convertir, usa `redondear()`.
+- `+`, `-`, `*` y `%` entre enteros dan un entero; si interviene un decimal, dan un decimal.
+- `/` siempre da un decimal: `7 / 2` es `3.5`.
+
+Un caso típico es empezar un acumulador en `0` y luego guardar un decimal:
+
+```
+var promedio = 0
+promedio = 7 / 2     // error: promedio es de tipo entero
+```
+
+La solución es empezar con `0.0` o declararla con `var promedio: decimal = 0`.
+
+### Listas
+
+Los elementos de una lista con tipo deben coincidir con él; una lista vacía `[]` sirve para cualquier lista.
+
+```
+var nombres: lista de texto = []
+agregar(nombres, "Ana")
+agregar(nombres, 42)         // error: esta lista es de texto
+```
+
+Una lista escrita con elementos de tipos distintos, como `[1, "a"]`, no tiene tipo de elemento y acepta cualquier valor.
+
+### Funciones con tipos
+
+```
+funcion promedio(notas: lista de entero): decimal {
+    ...
+}
+```
+
+- Los argumentos se revisan contra los tipos de los parámetros.
+- Si la función declara un tipo de retorno, cada `retornar` debe devolver ese tipo y **todos los caminos** deben llegar a un `retornar`, incluido el del `sino`.
+- Los parámetros sin tipo aceptan cualquier valor; sus errores aparecen recién al ejecutar.
 
 ## Operadores
 
@@ -73,6 +139,7 @@ De mayor a menor precedencia:
 - `y` y `o` no evalúan la derecha si la izquierda ya decide el resultado.
 - Las condiciones y los operadores lógicos solo aceptan `verdadero` o `falso`; no hay valores "parecidos a verdadero".
 - Sumar un texto con cualquier valor los une como texto: `"Edad: " + 20`.
+- Comparar con `==` valores de tipos distintos, como `"5" == 5`, es un error porque siempre daría falso; `nulo` se puede comparar con cualquier valor.
 
 ## Condicionales
 
@@ -143,13 +210,29 @@ Las posiciones empiezan en 0. Los textos también se leen por posición (`"hola"
 | `agregar(lista, valor)` | Agrega un valor al final de la lista |
 | `quitar(lista)` | Quita y devuelve el último elemento |
 | `texto(x)` | Convierte un valor en texto |
-| `numero(x)` | Convierte un texto como `"42"` en número |
-| `tipo(x)` | Devuelve el nombre del tipo: `"número"`, `"texto"`, `"lista"`... |
+| `numero(x)` | Convierte un texto como `"42"` en decimal |
+| `tipo(x)` | Devuelve el nombre del tipo al ejecutar: `"número"`, `"texto"`, `"lista"`... |
 | `redondear(x)` | Redondea al entero más cercano |
 | `raiz(x)` | Raíz cuadrada |
 | `aleatorio(min, max)` | Entero al azar entre `min` y `max`, ambos incluidos |
+| `leer(pregunta)` | Muestra la pregunta y devuelve, como texto, la línea que se escribe |
 
 Sus nombres se pueden usar para variables propias (`var texto = "hola"`); en ese caso la variable tapa a la función dentro de su bloque.
+
+## Leer datos
+
+`leer` muestra una pregunta y espera una línea. Siempre devuelve un texto; para usarlo como número se convierte con `numero`:
+
+```
+var nombre = leer("¿Cómo te llamas? ")
+var edad = numero(leer("¿Cuántos años tienes? "))
+mostrar("Hola,", nombre + ". En 10 años tendrás", edad + 10)
+```
+
+- En la **terminal** se escribe cada respuesta y se presiona Enter. También se pueden pasar todas desde un archivo: `npm run kuntur ejemplos/promedio.kun < ejemplos/promedio.entrada`.
+- En el **playground**, las respuestas se escriben de antemano en el cuadro Entrada, una por línea: cada `leer` usa la siguiente. La salida muestra la conversación completa, con las respuestas resaltadas.
+- Si el programa pide más datos de los que hay, se detiene con un error en la línea del `leer`.
+- Para guardar el dato en un `entero`, hay que redondearlo: `redondear(numero(leer("...")))`.
 
 ## Palabras reservadas
 
@@ -162,7 +245,7 @@ Como `y` y `o` son palabras reservadas, no se pueden usar como nombres de variab
 Kuntur informa la etapa, la línea y la columna, y señala el lugar exacto:
 
 ```
-Error de ejecución en la línea 4, columna 27:
+Error semántico en la línea 4, columna 27:
   4 | var mensaje = "Tienes " + edda + " años"
     |                           ^
 `edda` no existe. ¿Quisiste decir `edad`?
@@ -172,6 +255,8 @@ Error de ejecución en la línea 4, columna 27:
 |---|---|
 | Error léxico | Caracteres desconocidos, textos sin cerrar, `&&` en vez de `y` |
 | Error de sintaxis | Estructura: paréntesis, llaves, `=` en vez de `==` en condiciones |
-| Error de ejecución | Variables inexistentes, tipos incompatibles, posiciones fuera de rango |
+| Error semántico | Antes de ejecutar: variables inexistentes, tipos incompatibles, argumentos, retornos |
+| Error de compilación | Solo al compilar a WebAssembly: tipos que faltan para traducir el programa |
+| Error de ejecución | Al ejecutar: división entre cero, posiciones fuera de rango, valores de tipo desconocido |
 
 Para evitar que un programa se cuelgue, la ejecución se detiene después de 10 millones de pasos o de 400 llamadas anidadas.

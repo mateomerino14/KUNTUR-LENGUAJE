@@ -36,6 +36,11 @@ export class Environment {
     return this.parent.lookup(name);
   }
 
+  // Devuelve los nombres declarados en este ámbito, sin los de afuera
+  entries(): IterableIterator<[string, Binding]> {
+    return this.bindings.entries();
+  }
+
   // Reúne todos los nombres visibles desde este ámbito, para sugerir correcciones
   visibleNames(): Set<string> {
     let names = new Set<string>();

@@ -1,4 +1,14 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
+import {
+  arityMessage,
+  divisionByZeroMessage,
+  readOnlyMessage,
+  redeclarationMessage,
+  tooDeepMessage,
+  tooManyStepsMessage,
+  undeclaredAssignmentMessage,
+  zeroStepMessage,
+} from '../errors/messages.js';
 import {withSuggestion} from '../errors/suggestions.js';
 import type {
   Assign,
@@ -17,9 +27,11 @@ import type {
   VarDeclaration,
   While,
 } from '../parser/ast.js';
-import {createBuiltins} from './builtins.js';
+import {createBuiltins, noInput, type ReadLine} from './builtins.js';
 import {Environment, type Binding} from './environment.js';
+import {checkIndex} from './indexing.js';
 import {RuntimeError} from './runtimeError.js';
+import {programFrameName, takeSnapshot, type StepListener} from './trace.js';
 import {describeType, isCallable, stringify, valuesEqual, type Callable, type UserFunction, type Value} from './values.js';
 
 export interface InterpretOptions {
@@ -27,6 +39,8 @@ export interface InterpretOptions {
   maxSteps?: number;
   maxCallDepth?: number;
   random?: () => number;
+  read?: ReadLine;
+  onStep?: StepListener;
 }
 
 export interface InterpretResult {
@@ -43,8 +57,8 @@ const normalSignal: Signal = {kind: 'normal'};
 const breakSignal: Signal = {kind: 'break'};
 const continueSignal: Signal = {kind: 'continue'};
 
-const defaultMaxSteps = 10_000_000;
-const defaultMaxCallDepth = 400;
+export const defaultMaxSteps = 10_000_000;
+export const defaultMaxCallDepth = 400;
 
 const arithmeticVerbs: Readonly<Record<string, string>> = {
   '+': 'sumar',
@@ -54,21 +68,6 @@ const arithmeticVerbs: Readonly<Record<string, string>> = {
   '%': 'calcular el residuo entre',
 };
 
-const assignmentErrors: Readonly<Record<string, (name: string) => string>> = {
-  constant: (name) => `\`${name}\` es una constante; su valor no se puede cambiar.`,
-  loop: (name) => `\`${name}\` es la variable del ciclo \`para\`; no se puede cambiar dentro del ciclo.`,
-  function: (name) => `\`${name}\` es una función; no se le puede asignar un valor.`,
-  native: (name) => `\`${name}\` es una función propia de Kuntur. Para usar ese nombre en una variable, decláralo con \`var ${name} = ...\`.`,
-};
-
-// Arma "1 valor" o "N valores" según la cantidad
-const countValues = (count: number): string => {
-  if (count === 1) {
-    return '1 valor';
-  }
-  return `${count} valores`;
-};
-
 class Interpreter {
   private readonly globals: Environment;
   private readonly maxSteps: number;
@@ -76,6 +75,8 @@ class Interpreter {
   private steps = 0;
   private callDepth = 0;
   private lastCallPosition: Position = {line: 1, column: 1};
+  private readonly onStep: StepListener | null;
+  private readonly callStack: string[] = [programFrameName];
 
   constructor(options: InterpretOptions) {
     const builtins = new Environment();
@@ -83,12 +84,13 @@ class Interpreter {
     if (options.random !== undefined) {
       random = options.random;
     }
-    for (const builtin of createBuiltins({write: options.write, random})) {
+    for (const builtin of createBuiltins({write: options.write, random, read: options.read ?? noInput})) {
       builtins.define(builtin.name, builtin, 'native');
     }
     this.globals = new Environment(builtins);
     this.maxSteps = options.maxSteps ?? defaultMaxSteps;
     this.maxCallDepth = options.maxCallDepth ?? defaultMaxCallDepth;
+    this.onStep = options.onStep ?? null;
   }
 
   // Ejecuta el programa y convierte los errores de ejecución en diagnósticos
@@ -103,7 +105,7 @@ class Interpreter {
       }
       // El motor de JavaScript se quedó sin pila antes de llegar al límite propio
       if (error instanceof RangeError) {
-        return {diagnostics: [createDiagnostic('runtime', this.tooDeepMessage(), this.lastCallPosition)]};
+        return {diagnostics: [createDiagnostic('runtime', tooDeepMessage(), this.lastCallPosition)]};
       }
       throw error;
     }
@@ -127,6 +129,9 @@ class Interpreter {
 
   // Ejecuta una sentencia y avisa si debe cortarse el flujo
   private execute(statement: Statement, scope: Environment): Signal {
+    if (this.onStep !== null && statement.kind !== 'FunctionDeclaration' && statement.kind !== 'Block') {
+      this.onStep(statement.position, () => takeSnapshot(scope, this.globals, this.callStack));
+    }
     switch (statement.kind) {
       case 'VarDeclaration':
         this.executeVarDeclaration(statement, scope);
@@ -178,7 +183,7 @@ class Interpreter {
   // Declara un nombre nuevo, evitando repetirlo en el mismo bloque
   private defineName(name: string, value: Value, kind: Binding['kind'], scope: Environment, position: Position): void {
     if (!scope.define(name, value, kind)) {
-      throw new RuntimeError(`Ya existe algo llamado \`${name}\` en este bloque; elige otro nombre.`, position);
+      throw new RuntimeError(redeclarationMessage(name), position);
     }
   }
 
@@ -223,7 +228,7 @@ class Interpreter {
     if (statement.step !== null) {
       step = this.requireNumber(this.evaluate(statement.step, scope), '`paso`', statement.step.position);
       if (step === 0) {
-        throw new RuntimeError('El `paso` no puede ser cero: el ciclo nunca terminaría.', statement.step.position);
+        throw new RuntimeError(zeroStepMessage, statement.step.position);
       }
     }
     // Se calcula cada valor desde el inicio para no acumular errores de los decimales
@@ -296,20 +301,20 @@ class Interpreter {
       if (!Array.isArray(list)) {
         throw new RuntimeError(`Solo se puede asignar por posición en una lista, pero aquí hay ${describeType(list)}.`, target.position);
       }
-      list[this.checkIndex(index, list.length, target.position)] = value;
+      list[checkIndex(index, list.length, target.position)] = value;
       return value;
     }
     const binding = scope.lookup(target.name);
     if (binding === undefined) {
       const message = withSuggestion(
-        `\`${target.name}\` no existe. Para crearla escribe \`var ${target.name} = ...\`.`,
+        undeclaredAssignmentMessage(target.name),
         target.name,
         scope.visibleNames(),
       );
       throw new RuntimeError(message, target.position);
     }
     if (binding.kind !== 'variable') {
-      throw new RuntimeError(assignmentErrors[binding.kind](target.name), target.position);
+      throw new RuntimeError(readOnlyMessage(binding.kind, target.name), target.position);
     }
     binding.value = value;
     return value;
@@ -404,7 +409,7 @@ class Interpreter {
       );
     }
     if ((operator === '/' || operator === '%') && right === 0) {
-      throw new RuntimeError('No se puede dividir entre cero.', position);
+      throw new RuntimeError(divisionByZeroMessage, position);
     }
     switch (operator) {
       case '-':
@@ -475,10 +480,7 @@ class Interpreter {
       expected = callee.declaration.params.length;
     }
     if (expected !== null && expected !== count) {
-      throw new RuntimeError(
-        `La función \`${name}\` espera ${countValues(expected)}, pero recibió ${countValues(count)}.`,
-        position,
-      );
+      throw new RuntimeError(arityMessage(name, expected, count), position);
     }
   }
 
@@ -487,9 +489,10 @@ class Interpreter {
     this.tick(position);
     this.lastCallPosition = position;
     if (this.callDepth >= this.maxCallDepth) {
-      throw new RuntimeError(this.tooDeepMessage(fn.declaration.name), position);
+      throw new RuntimeError(tooDeepMessage(fn.declaration.name), position);
     }
     this.callDepth++;
+    this.callStack.push(fn.declaration.name);
     try {
       const callScope = new Environment(fn.closure);
       fn.declaration.params.forEach((param, index) => {
@@ -503,16 +506,8 @@ class Interpreter {
     }
     finally {
       this.callDepth--;
+      this.callStack.pop();
     }
-  }
-
-  // Mensaje cuando hay demasiadas llamadas anidadas
-  private tooDeepMessage(name?: string): string {
-    let subject = 'una función';
-    if (name !== undefined) {
-      subject = `\`${name}\``;
-    }
-    return `Hay demasiadas llamadas anidadas a ${subject}. ¿Se llama a sí misma sin una condición que la detenga?`;
   }
 
   // Lee el elemento de una lista o el carácter de un texto en una posición
@@ -525,35 +520,7 @@ class Interpreter {
         expression.position,
       );
     }
-    return target[this.checkIndex(index, target.length, expression.position)];
-  }
-
-  // Verifica que la posición sea un entero dentro del rango y la devuelve
-  private checkIndex(index: Value, length: number, position: Position): number {
-    if (typeof index !== 'number' || !Number.isInteger(index)) {
-      throw new RuntimeError(
-        `La posición debe ser un número entero, pero aquí es ${describeType(index)}${this.showNumber(index)}.`,
-        position,
-      );
-    }
-    if (length === 0) {
-      throw new RuntimeError(`La posición ${index} no existe: no hay ningún elemento.`, position);
-    }
-    if (index < 0 || index >= length) {
-      throw new RuntimeError(
-        `La posición ${index} no existe: hay ${length} elementos, en las posiciones 0 a ${length - 1}.`,
-        position,
-      );
-    }
-    return index;
-  }
-
-  // Muestra el número entre paréntesis cuando ayuda a entender el error
-  private showNumber(value: Value): string {
-    if (typeof value === 'number') {
-      return ` (${value})`;
-    }
-    return '';
+    return target[checkIndex(index, target.length, expression.position)];
   }
 
   // Exige que la condición sea verdadero o falso
@@ -579,10 +546,7 @@ class Interpreter {
   private tick(position: Position): void {
     this.steps++;
     if (this.steps > this.maxSteps) {
-      throw new RuntimeError(
-        `El programa superó el límite de ${this.maxSteps} pasos. ¿Hay un ciclo que nunca termina?`,
-        position,
-      );
+      throw new RuntimeError(tooManyStepsMessage(this.maxSteps), position);
     }
   }
 }

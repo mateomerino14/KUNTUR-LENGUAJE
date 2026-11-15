@@ -1,8 +1,9 @@
 import tseslint from 'typescript-eslint';
 import stylistic from '@stylistic/eslint-plugin';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  {ignores: ['dist', 'node_modules']},
+  {ignores: ['dist', 'node_modules', 'playground/dist']},
   ...tseslint.configs.recommended,
   {
     plugins: {'@stylistic': stylistic},
@@ -20,5 +21,15 @@ export default tseslint.config(
       'no-var': 'error',
       'eqeqeq': ['error', 'always'],
     },
+  },
+  {
+    files: ['playground/**/*.{ts,tsx}'],
+    plugins: {'react-hooks': reactHooks},
+    rules: reactHooks.configs.recommended.rules,
+  },
+  {
+    // En los componentes se admite el ternario solo para valores simples y clases, como indica reglas.md
+    files: ['playground/**/*.tsx'],
+    rules: {'no-ternary': 'off'},
   },
 );

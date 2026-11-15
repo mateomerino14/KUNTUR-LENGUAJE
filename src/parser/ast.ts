@@ -6,12 +6,14 @@ export type UnaryOperator = '-' | 'no';
 
 export interface TypeAnnotation {
   name: string;
+  element: TypeAnnotation | null;
   position: Position;
 }
 
 export interface NumberLiteral {
   kind: 'NumberLiteral';
   value: number;
+  decimal: boolean;
   position: Position;
 }
 
