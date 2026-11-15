@@ -32,3 +32,21 @@ export const undeclaredAssignmentMessage = (name: string): string => {
 export const redeclarationMessage = (name: string): string => {
   return `Ya existe algo llamado \`${name}\` en este bloque; elige otro nombre.`;
 };
+
+export const divisionByZeroMessage = 'No se puede dividir entre cero.';
+
+export const zeroStepMessage = 'El `paso` no puede ser cero: el ciclo nunca terminaría.';
+
+// Explica que el programa superó el límite de pasos
+export const tooManyStepsMessage = (maxSteps: number): string => {
+  return `El programa superó el límite de ${maxSteps} pasos. ¿Hay un ciclo que nunca termina?`;
+};
+
+// Explica que hay demasiadas llamadas anidadas, nombrando la función si se conoce
+export const tooDeepMessage = (name?: string): string => {
+  let subject = 'una función';
+  if (name !== undefined) {
+    subject = `\`${name}\``;
+  }
+  return `Hay demasiadas llamadas anidadas a ${subject}. ¿Se llama a sí misma sin una condición que la detenga?`;
+};

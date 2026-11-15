@@ -1,4 +1,4 @@
-export type Stage = 'lexer' | 'parser' | 'semantic' | 'runtime';
+export type Stage = 'lexer' | 'parser' | 'semantic' | 'compiler' | 'runtime';
 
 export interface Position {
   line: number;
@@ -15,6 +15,7 @@ const stageLabels: Record<Stage, string> = {
   lexer: 'Error léxico',
   parser: 'Error de sintaxis',
   semantic: 'Error semántico',
+  compiler: 'Error de compilación',
   runtime: 'Error de ejecución',
 };
 

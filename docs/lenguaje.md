@@ -1,6 +1,6 @@
 # Referencia del lenguaje Kuntur
 
-Kuntur es un lenguaje pequeño, con palabras clave en español. Esta referencia describe lo que funciona en la versión actual (fase 2: tipos y análisis semántico).
+Kuntur es un lenguaje pequeño, con palabras clave en español. Esta referencia describe lo que funciona en la versión actual (fase 3: compilación a WebAssembly). Los programas se pueden interpretar o [compilar a WebAssembly](webassembly.md).
 
 ## Estructura de un programa
 
@@ -240,6 +240,7 @@ Error semántico en la línea 4, columna 27:
 | Error léxico | Caracteres desconocidos, textos sin cerrar, `&&` en vez de `y` |
 | Error de sintaxis | Estructura: paréntesis, llaves, `=` en vez de `==` en condiciones |
 | Error semántico | Antes de ejecutar: variables inexistentes, tipos incompatibles, argumentos, retornos |
+| Error de compilación | Solo al compilar a WebAssembly: tipos que faltan para traducir el programa |
 | Error de ejecución | Al ejecutar: división entre cero, posiciones fuera de rango, valores de tipo desconocido |
 
 Para evitar que un programa se cuelgue, la ejecución se detiene después de 10 millones de pasos o de 400 llamadas anidadas.

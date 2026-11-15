@@ -25,14 +25,16 @@ Error semántico en la línea 4, columna 27:
 ## Cómo funciona
 
 ```
-código fuente ──► analizador léxico ──► analizador sintáctico ──► análisis semántico ──► intérprete
-                     (tokens)              (árbol de sintaxis)       (nombres y tipos)
+código fuente ──► analizador léxico ──► analizador sintáctico ──► análisis semántico ─┬─► intérprete
+                     (tokens)              (árbol de sintaxis)       (nombres y tipos)  │
+                                                                                         └─► compilador ──► WebAssembly
 ```
 
 1. **Analizador léxico** (`src/lexer`): corta el texto en tokens y decide dónde termina cada sentencia según los saltos de línea.
 2. **Analizador sintáctico** (`src/parser`): arma el árbol de sintaxis con un parser descendente recursivo y el método de Pratt para la precedencia de los operadores. Se recupera de los errores para informar varios en una sola pasada.
 3. **Análisis semántico** (`src/checker`): revisa nombres y tipos antes de ejecutar. Deduce el tipo de las variables sin anotación y deja como desconocido lo que no se puede saber (tipado gradual).
 4. **Intérprete** (`src/interpreter`): recorre el árbol y ejecuta el programa, con ámbitos, clausuras y límites contra ciclos infinitos. Sus revisiones de tipos quedan como red de seguridad para los valores desconocidos.
+5. **Compilador** (`src/compiler`): traduce el programa a WebAssembly escribiendo el binario byte por byte, sin bibliotecas. El resultado corre unas 15 veces más rápido que el intérprete y da la misma salida. Ver [cómo funciona](docs/webassembly.md).
 
 ## Requisitos
 
@@ -50,6 +52,9 @@ npm install
 npm run kuntur ejemplos/factorial.kun            # Ejecuta un programa
 npm run kuntur -- --tokens ejemplos/hola.kun     # Muestra los tokens
 npm run kuntur -- --arbol ejemplos/hola.kun      # Muestra el árbol de sintaxis
+npm run kuntur -- --wasm ejemplos/tipos.kun      # Compila a WebAssembly y ejecuta
+npm run kuntur -- --wat ejemplos/hola.kun        # Muestra el WebAssembly generado
+npm run kuntur -- --compilar ejemplos/tipos.kun tipos.wasm   # Guarda el binario
 ```
 
 También como biblioteca:
@@ -74,6 +79,7 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 ## Documentación
 
 - [Referencia del lenguaje](docs/lenguaje.md)
+- [Compilación a WebAssembly](docs/webassembly.md)
 - [Estándares de desarrollo](reglas.md)
 - [Programas de ejemplo](ejemplos/)
 
@@ -83,5 +89,5 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 |---|---|---|
 | 1 | Analizador léxico, analizador sintáctico e intérprete | Terminada |
 | 2 | Tipos (`entero`, `decimal`, `texto`, `logico`, `lista de ...`), análisis semántico y errores antes de ejecutar | Terminada |
-| 3 | Generación de WebAssembly | Pendiente |
+| 3 | Compilación a WebAssembly | Terminada |
 | 4 | Playground web con visualización de tokens, árbol y ejecución paso a paso | Pendiente |

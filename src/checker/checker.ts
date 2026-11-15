@@ -1,5 +1,11 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
-import {arityMessage, readOnlyMessage, redeclarationMessage, undeclaredAssignmentMessage} from '../errors/messages.js';
+import {
+  arityMessage,
+  readOnlyMessage,
+  redeclarationMessage,
+  undeclaredAssignmentMessage,
+  zeroStepMessage,
+} from '../errors/messages.js';
 import {withSuggestion} from '../errors/suggestions.js';
 import type {
   Assign,
@@ -43,8 +49,16 @@ import {
   type Type,
 } from './types.js';
 
+export interface TypeInfo {
+  expressions: Map<Expression, Type>;
+  declarations: Map<VarDeclaration, Type>;
+  functions: Map<FunctionDeclaration, FunctionType>;
+  loops: Map<For, Type>;
+}
+
 export interface CheckResult {
   diagnostics: Diagnostic[];
+  types: TypeInfo;
 }
 
 interface FunctionContext {
@@ -132,6 +146,7 @@ const alwaysReturns = (statements: Statement[]): boolean => statements.some(stat
 
 class Checker {
   private readonly diagnostics: Diagnostic[] = [];
+  private readonly types: TypeInfo = {expressions: new Map(), declarations: new Map(), functions: new Map(), loops: new Map()};
   private readonly globals: Scope;
   private functionContext: FunctionContext | null = null;
 
@@ -148,7 +163,7 @@ class Checker {
     this.checkStatements(program.statements, this.globals);
     // Los cuerpos de las funciones se revisan al final de su bloque; se ordena para leer los errores de arriba hacia abajo
     const sorted = [...this.diagnostics].sort(comparePositions);
-    return {diagnostics: sorted};
+    return {diagnostics: sorted, types: this.types};
   }
 
   // Crea el símbolo de una función propia del lenguaje
@@ -241,6 +256,7 @@ class Checker {
       declaredType = initializerType;
       inferred = true;
     }
+    this.types.declarations.set(statement, declaredType);
     let kind: SymbolKind = 'variable';
     if (statement.constant) {
       kind = 'constant';
@@ -269,6 +285,7 @@ class Checker {
         );
       }
     }
+    this.types.expressions.set(expression, expected);
     return expected;
   }
 
@@ -324,9 +341,11 @@ class Checker {
 
   // Registra el tipo de una función para poder llamarla desde cualquier parte del bloque
   private declareFunction(declaration: FunctionDeclaration, scope: Scope): void {
+    const type = this.functionType(declaration);
+    this.types.functions.set(declaration, type);
     this.defineSymbol(scope, {
       name: declaration.name,
-      type: this.functionType(declaration),
+      type,
       kind: 'function',
       inferred: false,
       builtin: null,
@@ -444,10 +463,11 @@ class Checker {
     if (statement.step !== null) {
       boundTypes.push(this.requireNumericBound(statement.step, 'paso', scope));
       if (this.isZeroLiteral(statement.step)) {
-        this.report('El `paso` no puede ser cero: el ciclo nunca terminaría.', statement.step.position);
+        this.report(zeroStepMessage, statement.step.position);
       }
     }
     const variableType = boundTypes.reduce(numericResult);
+    this.types.loops.set(statement, variableType);
     const loopScope = new Scope(scope);
     loopScope.define({
       name: statement.variable,
@@ -481,8 +501,15 @@ class Checker {
     return false;
   }
 
-  // Calcula el tipo de una expresión y registra los errores que encuentre
+  // Calcula el tipo de una expresión y lo guarda para las etapas siguientes
   private typeOf(expression: Expression, scope: Scope): Type {
+    const type = this.computeType(expression, scope);
+    this.types.expressions.set(expression, type);
+    return type;
+  }
+
+  // Calcula el tipo de una expresión y registra los errores que encuentre
+  private computeType(expression: Expression, scope: Scope): Type {
     switch (expression.kind) {
       case 'NumberLiteral':
         if (expression.decimal || !Number.isInteger(expression.value)) {
