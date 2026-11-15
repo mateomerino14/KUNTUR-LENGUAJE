@@ -1,0 +1,16 @@
+export const COLORS = {
+  salt: 'var(--color-salt)',
+  paper: 'var(--color-paper)',
+  ink: 'var(--color-ink)',
+  inkMuted: 'var(--color-ink-muted)',
+  line: 'var(--color-line)',
+  fuchsia: 'var(--color-fuchsia)',
+  mustard: 'var(--color-mustard)',
+  teal: 'var(--color-teal)',
+  violet: 'var(--color-violet)',
+  blue: 'var(--color-blue)',
+  error: 'var(--color-error)',
+  errorSoft: 'var(--color-error-soft)',
+  step: 'var(--color-step)',
+  selection: 'var(--color-selection)',
+} as const;
