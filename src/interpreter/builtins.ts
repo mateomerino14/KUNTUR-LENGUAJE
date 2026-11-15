@@ -1,10 +1,17 @@
 import type {Position} from '../errors/diagnostic.js';
+import {noMoreInputMessage} from '../errors/messages.js';
 import {RuntimeError} from './runtimeError.js';
 import {describeType, stringify, stringifyLiteral, typeName, type NativeFunction, type Value} from './values.js';
+
+export type ReadLine = (prompt: string) => string | null;
+
+// Fuente de entrada vacía, para cuando el programa no recibe datos
+export const noInput: ReadLine = () => null;
 
 export interface BuiltinOptions {
   write: (line: string) => void;
   random: () => number;
+  read: ReadLine;
 }
 
 const numberPattern = /^-?\d+(\.\d+)?$/;
@@ -144,7 +151,24 @@ const createRandom = (random: () => number): NativeFunction => ({
   },
 });
 
-// Crea las funciones propias del lenguaje, conectadas a la salida indicada
+// Pregunta con el mensaje y devuelve la línea que escribió la persona, como texto
+const createRead = (read: ReadLine): NativeFunction => ({
+  kind: 'native',
+  name: 'leer',
+  arity: 1,
+  call: ([prompt], position) => {
+    if (typeof prompt !== 'string') {
+      throw new RuntimeError(`\`leer\` necesita un texto para preguntar, pero recibió ${describeType(prompt)}.`, position);
+    }
+    const answer = read(prompt);
+    if (answer === null) {
+      throw new RuntimeError(noMoreInputMessage, position);
+    }
+    return answer;
+  },
+});
+
+// Crea las funciones propias del lenguaje, conectadas a la salida, la entrada y el azar indicados
 export const createBuiltins = (options: BuiltinOptions): NativeFunction[] => [
   createShow(options.write),
   lengthFunction,
@@ -156,4 +180,5 @@ export const createBuiltins = (options: BuiltinOptions): NativeFunction[] => [
   roundFunction,
   squareRootFunction,
   createRandom(options.random),
+  createRead(options.read),
 ];

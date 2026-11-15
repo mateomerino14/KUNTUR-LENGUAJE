@@ -27,7 +27,7 @@ import type {
   VarDeclaration,
   While,
 } from '../parser/ast.js';
-import {createBuiltins} from './builtins.js';
+import {createBuiltins, noInput, type ReadLine} from './builtins.js';
 import {Environment, type Binding} from './environment.js';
 import {checkIndex} from './indexing.js';
 import {RuntimeError} from './runtimeError.js';
@@ -39,6 +39,7 @@ export interface InterpretOptions {
   maxSteps?: number;
   maxCallDepth?: number;
   random?: () => number;
+  read?: ReadLine;
   onStep?: StepListener;
 }
 
@@ -83,7 +84,7 @@ class Interpreter {
     if (options.random !== undefined) {
       random = options.random;
     }
-    for (const builtin of createBuiltins({write: options.write, random})) {
+    for (const builtin of createBuiltins({write: options.write, random, read: options.read ?? noInput})) {
       builtins.define(builtin.name, builtin, 'native');
     }
     this.globals = new Environment(builtins);

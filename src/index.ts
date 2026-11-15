@@ -6,6 +6,7 @@ import {moduleToText} from './compiler/wasm/text.js';
 import type {Diagnostic} from './errors/diagnostic.js';
 import {interpret} from './interpreter/interpreter.js';
 import {tokenize} from './lexer/lexer.js';
+import type {ReadLine} from './interpreter/builtins.js';
 import type {StepListener} from './interpreter/trace.js';
 import type {Program} from './parser/ast.js';
 import {parseTokens} from './parser/parser.js';
@@ -18,6 +19,7 @@ export type {Token} from './lexer/token.js';
 export type * from './parser/ast.js';
 export {printExpression} from './parser/printer.js';
 export type {StepListener, StepSnapshot, TraceVariable} from './interpreter/trace.js';
+export type {ReadLine} from './interpreter/builtins.js';
 export type {TypeInfo} from './checker/checker.js';
 export type {Type} from './checker/types.js';
 export {typeToString} from './checker/types.js';
@@ -48,6 +50,7 @@ export interface RunOptions {
   onStep?: StepListener;
   maxSteps?: number;
   random?: () => number;
+  read?: ReadLine;
 }
 
 export interface RunResult {
@@ -105,7 +108,7 @@ export const runCompiled = async (source: string, options: RunOptions = {}): Pro
     output.push(line);
     options.write?.(line);
   };
-  const diagnostics = await runWasm(compiled.binary, {write, maxSteps: options.maxSteps, random: options.random});
+  const diagnostics = await runWasm(compiled.binary, {write, maxSteps: options.maxSteps, random: options.random, read: options.read});
   return {output, diagnostics};
 };
 
@@ -120,6 +123,12 @@ export const run = (source: string, options: RunOptions = {}): RunResult => {
     output.push(line);
     options.write?.(line);
   };
-  const result = interpret(checked.program, {write, maxSteps: options.maxSteps, random: options.random, onStep: options.onStep});
+  const result = interpret(checked.program, {
+    write,
+    maxSteps: options.maxSteps,
+    random: options.random,
+    read: options.read,
+    onStep: options.onStep,
+  });
   return {output, diagnostics: result.diagnostics};
 };
