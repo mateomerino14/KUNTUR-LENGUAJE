@@ -159,6 +159,14 @@ export interface For {
   position: Position;
 }
 
+export interface ForEach {
+  kind: 'ForEach';
+  variable: string;
+  iterable: Expression;
+  body: Block;
+  position: Position;
+}
+
 export interface Break {
   kind: 'Break';
   position: Position;
@@ -188,6 +196,7 @@ export type Statement =
   | If
   | While
   | For
+  | ForEach
   | Break
   | Continue
   | Block

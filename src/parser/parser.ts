@@ -31,6 +31,8 @@ const statementStarters: ReadonlySet<TokenType> = new Set([
 ]);
 
 const listTypeName = 'lista';
+const eachWord = 'cada';
+const inWord = 'en';
 const listElementWord = 'de';
 
 const statementSeparators: ReadonlySet<TokenType> = new Set([TokenType.Newline, TokenType.Semicolon]);
@@ -244,9 +246,18 @@ class Parser {
     return {kind: 'While', condition, body, position: keyword.position};
   }
 
-  // Analiza `para i desde inicio hasta fin paso salto { }`
+  // Analiza `para i desde inicio hasta fin paso salto { }` o `para cada elemento en lista { }`
   private parseFor(): Statement {
     const keyword = this.advance();
+    if (this.peek().lexeme === eachWord && this.peekAt(1).type === TokenType.Identifier) {
+      if (this.peekAt(2).lexeme === inWord) {
+        return this.parseForEach(keyword);
+      }
+      throw this.error(
+        `Para recorrer una lista escribe \`para cada ${this.peekAt(1).lexeme} en lista { }\`.`,
+        this.peekAt(2).position,
+      );
+    }
     const variable = this.consume(
       TokenType.Identifier,
       'Después de `para` va el nombre de la variable del ciclo, por ejemplo: `para i desde 1 hasta 10 { }`.',
@@ -261,6 +272,16 @@ class Parser {
     }
     const body = this.parseLoopBody('Se esperaba `{` para abrir el cuerpo del `para`.');
     return {kind: 'For', variable: variable.lexeme, start, end, step, body, position: keyword.position};
+  }
+
+  // Analiza `para cada elemento en lista { }`; `cada` y `en` solo son especiales en este lugar
+  private parseForEach(keyword: Token): Statement {
+    this.advance();
+    const variable = this.advance();
+    this.advance();
+    const iterable = this.parseExpression();
+    const body = this.parseLoopBody('Se esperaba `{` para abrir el cuerpo del `para cada`.');
+    return {kind: 'ForEach', variable: variable.lexeme, iterable, body, position: keyword.position};
   }
 
   // Analiza el cuerpo de un ciclo, donde se permiten `romper` y `continuar`
@@ -577,6 +598,11 @@ class Parser {
   // Devuelve el token actual sin consumirlo
   private peek(): Token {
     return this.tokens[this.current];
+  }
+
+  // Devuelve un token más adelante sin consumirlo; al pasar el final devuelve el fin del archivo
+  private peekAt(offset: number): Token {
+    return this.tokens[Math.min(this.current + offset, this.tokens.length - 1)];
   }
 
   // Devuelve el último token consumido
