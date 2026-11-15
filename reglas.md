@@ -160,7 +160,7 @@ playground/src/
 
 ### Comentarios y sintaxis
 
-- En los componentes y hooks del playground no se escriben comentarios por función; el nombre y el contenido deben ser suficientes. Las funciones de `utils/` y `constants/` sí llevan su comentario de una línea.
+- Los componentes y los hooks no llevan comentarios por función; el nombre y el contenido deben ser suficientes. Las funciones auxiliares, en cualquier archivo, sí llevan su comentario de una línea.
 - Dentro del JSX se admite el ternario para clases y valores simples; en la lógica se usan bloques `if`.
 
 ### Accesibilidad
