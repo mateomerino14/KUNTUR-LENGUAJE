@@ -19,14 +19,25 @@ export type Callable = UserFunction | NativeFunction;
 
 export type Dict = Map<string, Value>;
 
-export type Value = number | string | boolean | null | Value[] | Dict | Callable;
+export interface RecordValue {
+  kind: 'record';
+  name: string;
+  fields: Map<string, Value>;
+}
+
+export type Value = number | string | boolean | null | Value[] | Dict | RecordValue | Callable;
+
+// Indica si el valor es un registro
+export const isRecord = (value: Value): value is RecordValue => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof Map) && value.kind === 'record';
+};
 
 // Indica si el valor es un diccionario
 export const isDict = (value: Value): value is Dict => value instanceof Map;
 
 // Indica si el valor es una función del usuario o propia del lenguaje
 export const isCallable = (value: Value): value is Callable => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) && !isDict(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && !isDict(value) && !isRecord(value);
 };
 
 // Nombre del tipo del valor, tal como lo ve quien programa en Kuntur
@@ -49,6 +60,9 @@ export const typeName = (value: Value): string => {
   if (isDict(value)) {
     return 'diccionario';
   }
+  if (isRecord(value)) {
+    return value.name;
+  }
   return 'función';
 };
 
@@ -63,7 +77,12 @@ const typeDescriptions: Readonly<Record<string, string>> = {
 };
 
 // Describe el tipo con su artículo, para usarlo dentro de una oración
-export const describeType = (value: Value): string => typeDescriptions[typeName(value)];
+export const describeType = (value: Value): string => {
+  if (isRecord(value)) {
+    return `un registro ${value.name}`;
+  }
+  return typeDescriptions[typeName(value)];
+};
 
 // Nombre de una función para mostrarla
 const callableName = (callable: Callable): string => {
@@ -74,7 +93,16 @@ const callableName = (callable: Callable): string => {
 };
 
 // Convierte un valor en texto; dentro de listas los textos van entre comillas
-const stringifyValue = (value: Value, nested: boolean, seen: Set<Value[] | Dict>): string => {
+const stringifyValue = (value: Value, nested: boolean, seen: Set<Value[] | Dict | RecordValue>): string => {
+  if (isRecord(value)) {
+    if (seen.has(value)) {
+      return `${value.name}(...)`;
+    }
+    seen.add(value);
+    const fields = [...value.fields].map(([name, item]) => `${name}: ${stringifyValue(item, true, seen)}`);
+    seen.delete(value);
+    return `${value.name}(${fields.join(', ')})`;
+  }
   if (value === null) {
     return 'nulo';
   }
@@ -122,6 +150,9 @@ export const stringifyLiteral = (value: Value): string => stringifyValue(value, 
 
 // Compara dos valores; las listas se comparan elemento por elemento y los diccionarios clave por clave
 export const valuesEqual = (left: Value, right: Value): boolean => {
+  if (isRecord(left) && isRecord(right)) {
+    return left.name === right.name && [...left.fields].every(([name, item]) => valuesEqual(item, right.fields.get(name)!));
+  }
   if (isDict(left) && isDict(right)) {
     if (left.size !== right.size) {
       return false;

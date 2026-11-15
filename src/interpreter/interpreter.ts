@@ -3,6 +3,8 @@ import {
   arityMessage,
   divisionByZeroMessage,
   forEachTargetMessage,
+  missingFieldMessage,
+  notRecordMessage,
   readOnlyMessage,
   redeclarationMessage,
   tooDeepMessage,
@@ -18,6 +20,7 @@ import type {
   Call,
   Expression,
   DictLiteral,
+  Field,
   For,
   ForEach,
   FunctionDeclaration,
@@ -35,7 +38,7 @@ import {Environment, type Binding} from './environment.js';
 import {checkIndex, checkKey, readKey} from './indexing.js';
 import {RuntimeError} from './runtimeError.js';
 import {programFrameName, takeSnapshot, type StepListener} from './trace.js';
-import {describeType, isCallable, isDict, stringify, valuesEqual, type Callable, type Dict, type UserFunction, type Value} from './values.js';
+import {describeType, isCallable, isDict, isRecord, type NativeFunction, stringify, valuesEqual, type Callable, type Dict, type UserFunction, type Value} from './values.js';
 
 export interface InterpretOptions {
   write: (line: string) => void;
@@ -99,6 +102,7 @@ class Interpreter {
   // Ejecuta el programa y convierte los errores de ejecución en diagnósticos
   run(program: Program): InterpretResult {
     try {
+      this.declareRecords(program.statements);
       this.executeStatements(program.statements, this.globals);
       return {diagnostics: []};
     }
@@ -111,6 +115,23 @@ class Interpreter {
         return {diagnostics: [createDiagnostic('runtime', tooDeepMessage(), this.lastCallPosition)]};
       }
       throw error;
+    }
+  }
+
+  // Crea la función que arma cada registro, con un argumento por campo en el orden en que se declararon
+  private declareRecords(statements: Statement[]): void {
+    for (const statement of statements) {
+      if (statement.kind !== 'RecordDeclaration') {
+        continue;
+      }
+      const names = statement.fields.map((field) => field.name);
+      const constructor: NativeFunction = {
+        kind: 'native',
+        name: statement.name,
+        arity: names.length,
+        call: (args) => ({kind: 'record', name: statement.name, fields: new Map(names.map((name, index) => [name, args[index]]))}),
+      };
+      this.defineName(statement.name, constructor, 'function', this.globals, statement.position);
     }
   }
 
@@ -140,6 +161,7 @@ class Interpreter {
         this.executeVarDeclaration(statement, scope);
         return normalSignal;
       case 'FunctionDeclaration':
+      case 'RecordDeclaration':
         return normalSignal;
       case 'Return':
         if (statement.value === null) {
@@ -303,6 +325,8 @@ class Interpreter {
         return expression.elements.map((element) => this.evaluate(element, scope));
       case 'DictLiteral':
         return this.evaluateDict(expression, scope);
+      case 'Field':
+        return this.fieldsOf(expression, scope).get(expression.name)!;
       case 'Variable':
         return this.resolve(expression.name, scope, expression.position).value;
       case 'Assign':
@@ -330,6 +354,19 @@ class Interpreter {
     return dict;
   }
 
+  // Devuelve los campos del registro, verificando que tenga el campo pedido
+  private fieldsOf(expression: Field, scope: Environment): Map<string, Value> {
+    const target = this.evaluate(expression.target, scope);
+    if (!isRecord(target)) {
+      throw new RuntimeError(notRecordMessage(describeType(target)), expression.position);
+    }
+    if (!target.fields.has(expression.name)) {
+      const message = withSuggestion(missingFieldMessage(target.name, expression.name), expression.name, [...target.fields.keys()]);
+      throw new RuntimeError(message, expression.position);
+    }
+    return target.fields;
+  }
+
   // Busca un nombre y, si no existe, sugiere el más parecido
   private resolve(name: string, scope: Environment, position: Position): Binding {
     const binding = scope.lookup(name);
@@ -344,6 +381,10 @@ class Interpreter {
   private evaluateAssign(expression: Assign, scope: Environment): Value {
     const value = this.evaluate(expression.value, scope);
     const target = expression.target;
+    if (target.kind === 'Field') {
+      this.fieldsOf(target, scope).set(target.name, value);
+      return value;
+    }
     if (target.kind === 'Index') {
       const list = this.evaluate(target.target, scope);
       const index = this.evaluate(target.index, scope);
