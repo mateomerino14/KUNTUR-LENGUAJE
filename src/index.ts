@@ -18,6 +18,9 @@ export type {Token} from './lexer/token.js';
 export type * from './parser/ast.js';
 export {printExpression} from './parser/printer.js';
 export type {StepListener, StepSnapshot, TraceVariable} from './interpreter/trace.js';
+export type {TypeInfo} from './checker/checker.js';
+export type {Type} from './checker/types.js';
+export {typeToString} from './checker/types.js';
 
 export interface ParseSourceResult {
   program: Program | null;
