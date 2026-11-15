@@ -77,7 +77,8 @@ export const createHostFunctions = (options: HostOptions): Record<HostFunctionNa
   // Llama a una función propia del intérprete para reutilizar su comportamiento y sus errores
   const callBuiltin = (name: string, args: Value[], position: Position): Value => builtins.get(name)!.call(args, position);
   const lines: string[][] = [];
-  const literals = new Map<number, string>();
+  // Un texto vacío ocupa cero bytes y comparte su inicio con el siguiente: la clave necesita el inicio y el largo
+  const literals = new Map<string, string>();
   return {
     line_start: () => {
       lines.push([]);
@@ -95,10 +96,11 @@ export const createHostFunctions = (options: HostOptions): Record<HostFunctionNa
       options.write(lines.pop()!.join(' '));
     },
     text_literal: (offset: number, length: number) => {
-      let text = literals.get(offset);
+      const key = `${offset}:${length}`;
+      let text = literals.get(key);
       if (text === undefined) {
         text = textDecoder.decode(new Uint8Array(options.memory().buffer, offset, length));
-        literals.set(offset, text);
+        literals.set(key, text);
       }
       return text;
     },
