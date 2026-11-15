@@ -14,7 +14,7 @@ const pendingReport: StageReport = {status: 'pending', summary: 'sin revisar'};
 const errorReport = (count: number): StageReport => ({status: 'error', summary: plural(count, 'error', 'errores')});
 
 // Resume la ejecución: si no corrió, si el código cambió después, o cómo terminó
-const runReport = (analysis: Analysis, execution: Execution | null, running: boolean, mode: ExecutionMode): StageReport => {
+const runReport = (analysis: Analysis, input: string, execution: Execution | null, running: boolean, mode: ExecutionMode): StageReport => {
   if (running) {
     return {status: 'pending', summary: 'ejecutando'};
   }
@@ -24,20 +24,30 @@ const runReport = (analysis: Analysis, execution: Execution | null, running: boo
   if (execution.source !== analysis.source || execution.mode !== mode) {
     return {status: 'pending', summary: 'el código cambió'};
   }
+  if (execution.input !== input) {
+    return {status: 'pending', summary: 'la entrada cambió'};
+  }
   if (execution.diagnostics.length > 0) {
     return errorReport(execution.diagnostics.length);
   }
-  return {status: 'ok', summary: `${plural(execution.output.length, 'línea', 'líneas')} en ${Math.max(1, Math.round(execution.durationMs))} ms`};
+  const lines = execution.transcript.filter((entry) => entry.kind === 'output').length;
+  return {status: 'ok', summary: `${plural(lines, 'línea', 'líneas')} en ${Math.max(1, Math.round(execution.durationMs))} ms`};
 };
 
 // Calcula el estado de cada etapa a partir del análisis y de la última ejecución
-export const stageReports = (analysis: Analysis, execution: Execution | null, running: boolean, mode: ExecutionMode): Record<StageId, StageReport> => {
+export const stageReports = (
+  analysis: Analysis,
+  input: string,
+  execution: Execution | null,
+  running: boolean,
+  mode: ExecutionMode,
+): Record<StageId, StageReport> => {
   const reports: Record<StageId, StageReport> = {
     lexer: pendingReport,
     parser: pendingReport,
     semantic: pendingReport,
     wasm: pendingReport,
-    run: runReport(analysis, execution, running, mode),
+    run: runReport(analysis, input, execution, running, mode),
   };
   if (analysis.lexerDiagnostics.length > 0) {
     reports.lexer = errorReport(analysis.lexerDiagnostics.length);

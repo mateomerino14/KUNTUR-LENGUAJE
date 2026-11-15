@@ -75,7 +75,14 @@ export const App = () => {
         <div className={styles.inspector}>
           <Tabs tabs={TABS} active={playground.activeTab} onChange={playground.setActiveTab}>
             {playground.activeTab === 'output' && (
-              <OutputPanel blocking={playground.blocking} execution={playground.currentExecution} onSelectPosition={playground.selectPosition} />
+              <OutputPanel
+                blocking={playground.blocking}
+                execution={playground.currentExecution}
+                input={playground.input}
+                showInput={playground.showInput}
+                onInputChange={playground.setInput}
+                onSelectPosition={playground.selectPosition}
+              />
             )}
             {playground.activeTab === 'tokens' && (
               <TokensPanel tokens={playground.analysis.tokens} diagnostics={playground.analysis.lexerDiagnostics} onSelectPosition={playground.selectPosition} />

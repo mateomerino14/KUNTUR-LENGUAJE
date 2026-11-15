@@ -6,7 +6,7 @@ const keywords = new Set([
 ]);
 const atoms = new Set(['verdadero', 'falso', 'nulo']);
 const typeNames = new Set(['entero', 'decimal', 'texto', 'logico', 'lógico', 'lista', 'de']);
-const builtins = new Set(['mostrar', 'longitud', 'agregar', 'quitar', 'texto', 'numero', 'tipo', 'redondear', 'raiz', 'aleatorio']);
+const builtins = new Set(['mostrar', 'longitud', 'agregar', 'quitar', 'texto', 'numero', 'tipo', 'redondear', 'raiz', 'aleatorio', 'leer']);
 
 interface KunturState {
   afterColon: boolean;

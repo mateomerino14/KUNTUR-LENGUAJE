@@ -1,10 +1,10 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import type {Position} from '../../../src/index.js';
+import {TokenType, type Position, type Token} from '../../../src/index.js';
 import {DEFAULT_EXAMPLE, EXAMPLES} from '../constants/examples';
 import type {TabId} from '../constants/tabs';
 import type {CodeEditorHandle} from '../features/editor/organisms/CodeEditor';
 import type {EditorDiagnostic} from '../features/editor/hooks/useCodeEditor';
-import {sourceFromHash} from '../utils/shareCode';
+import {programFromHash, type SharedProgram} from '../utils/shareCode';
 import {stageReports} from '../utils/stageReports';
 import {blockingDiagnostics, useAnalysis} from './useAnalysis';
 import {useExecution, type ExecutionMode} from './useExecution';
@@ -12,8 +12,11 @@ import {useShareLink} from './useShareLink';
 
 const customExampleId = 'propio';
 
-// Código inicial: el del enlace compartido o el ejemplo por defecto
-const initialSource = (): string => sourceFromHash(window.location.hash) ?? DEFAULT_EXAMPLE.source;
+// Programa inicial: el del enlace compartido o el ejemplo por defecto
+const initialProgram = (): SharedProgram => programFromHash(window.location.hash) ?? DEFAULT_EXAMPLE;
+
+// Indica si el programa usa `leer`, para mostrar el cuadro de entrada
+const usesRead = (tokens: Token[]): boolean => tokens.some((token) => token.type === TokenType.Identifier && token.lexeme === 'leer');
 
 // Indica qué ejemplo coincide con el código, o el código propio si ninguno
 const exampleIdFor = (source: string): string => {
@@ -25,7 +28,8 @@ const exampleIdFor = (source: string): string => {
 };
 
 export const usePlayground = () => {
-  const [source, setSource] = useState(initialSource);
+  const [source, setSource] = useState(() => initialProgram().source);
+  const [input, setInput] = useState(() => initialProgram().input);
   const [activeTab, setActiveTab] = useState<TabId>('output');
   const [stepIndex, setStepIndex] = useState(0);
   const [weaveKey, setWeaveKey] = useState(0);
@@ -36,9 +40,10 @@ export const usePlayground = () => {
 
   useEffect(() => {
     const loadFromHash = () => {
-      const shared = sourceFromHash(window.location.hash);
+      const shared = programFromHash(window.location.hash);
       if (shared !== null) {
-        setSource(shared);
+        setSource(shared.source);
+        setInput(shared.input);
       }
     };
     window.addEventListener('hashchange', loadFromHash);
@@ -47,10 +52,10 @@ export const usePlayground = () => {
 
   const blocking = useMemo(() => blockingDiagnostics(analysis), [analysis]);
   let currentExecution = null;
-  if (execution !== null && execution.source === source && execution.mode === mode) {
+  if (execution !== null && execution.source === source && execution.input === input && execution.mode === mode) {
     currentExecution = execution;
   }
-  const reports = stageReports(analysis, execution, running, mode);
+  const reports = stageReports(analysis, input, execution, running, mode);
 
   const editorDiagnostics = useMemo(() => {
     const diagnostics: EditorDiagnostic[] = blocking.map((diagnostic) => ({...diagnostic.position, message: diagnostic.message, severity: 'error'}));
@@ -71,7 +76,7 @@ export const usePlayground = () => {
   }
 
   const runProgram = useCallback(async () => {
-    await execute(source, mode);
+    await execute(source, input, mode);
     setWeaveKey((key) => key + 1);
     setStepIndex(0);
     setActiveTab((tab) => {
@@ -80,20 +85,21 @@ export const usePlayground = () => {
       }
       return 'output';
     });
-  }, [execute, source, mode]);
+  }, [execute, source, input, mode]);
 
   const runStepper = useCallback(async () => {
     setMode('interpreter');
-    await execute(source, 'interpreter');
+    await execute(source, input, 'interpreter');
     setWeaveKey((key) => key + 1);
     setStepIndex(0);
     setActiveTab('stepper');
-  }, [execute, setMode, source]);
+  }, [execute, setMode, source, input]);
 
   const selectExample = useCallback((id: string) => {
     const example = EXAMPLES.find((candidate) => candidate.id === id);
     if (example !== undefined) {
       setSource(example.source);
+      setInput(example.input);
       window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);
@@ -113,6 +119,9 @@ export const usePlayground = () => {
     editor,
     source,
     setSource,
+    input,
+    setInput,
+    showInput: input !== '' || usesRead(analysis.tokens),
     analysis,
     blocking,
     mode,
@@ -133,7 +142,7 @@ export const usePlayground = () => {
     selectPosition,
     runProgram,
     runStepper,
-    share: () => share(source),
+    share: () => share({source, input}),
     shareMessage,
   };
 };
