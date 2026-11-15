@@ -33,6 +33,8 @@ En el playground se escribe código en Kuntur y se ve qué hace cada etapa del c
 
 Los errores se subrayan mientras se escribe y los programas se comparten con un enlace.
 
+La sección **Ejercicios** propone 11 problemas en tres niveles, con corrección automática: cada solución se prueba con casos visibles y ocultos, y el progreso queda guardado en el navegador. Ver [cómo funcionan](docs/ejercicios.md).
+
 ![Playground de Kuntur recorriendo un programa paso a paso](docs/playground.png)
 
 ```bash
@@ -103,6 +105,7 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 
 - [Referencia del lenguaje](docs/lenguaje.md)
 - [Compilación a WebAssembly](docs/webassembly.md)
+- [Ejercicios con corrección automática](docs/ejercicios.md)
 - [Estándares de desarrollo](reglas.md)
 - [Programas de ejemplo](ejemplos/)
 

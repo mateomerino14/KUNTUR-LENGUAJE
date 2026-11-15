@@ -96,6 +96,7 @@ src/
 ├── parser/         Tokens → árbol de sintaxis (AST)
 ├── checker/        Revisión de nombres y tipos antes de ejecutar
 ├── interpreter/    Ejecución directa del AST
+├── exercises/      Catálogo de ejercicios y su corrección
 ├── compiler/       Traducción a WebAssembly y funciones del anfitrión
 │   ├── wasm/       Codificación binaria y de texto de los módulos, y el ensamblador
 │   └── wasi/       Runtime del WebAssembly independiente
@@ -179,3 +180,4 @@ playground/src/
 - Cada prueba lleva un comentario de una línea con lo que verifica y su nombre en español.
 - Cada error nuevo del lenguaje se acompaña de una prueba que verifica su mensaje.
 - Todo lo que se puede compilar se prueba en el intérprete y en WebAssembly, y la salida y los errores deben ser idénticos.
+- Cada ejercicio nuevo lleva su solución de referencia en las pruebas.
