@@ -54,8 +54,8 @@ const normalSignal: Signal = {kind: 'normal'};
 const breakSignal: Signal = {kind: 'break'};
 const continueSignal: Signal = {kind: 'continue'};
 
-const defaultMaxSteps = 10_000_000;
-const defaultMaxCallDepth = 400;
+export const defaultMaxSteps = 10_000_000;
+export const defaultMaxCallDepth = 400;
 
 const arithmeticVerbs: Readonly<Record<string, string>> = {
   '+': 'sumar',

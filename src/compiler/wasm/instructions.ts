@@ -31,6 +31,8 @@ const simpleOpcodes = {
   'f64.ge': 0x66,
   'i32.add': 0x6a,
   'i32.sub': 0x6b,
+  'i32.and': 0x71,
+  'i32.or': 0x72,
   'f64.neg': 0x9a,
   'f64.floor': 0x9c,
   'f64.trunc': 0x9d,
