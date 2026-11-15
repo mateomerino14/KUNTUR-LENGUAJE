@@ -1,5 +1,5 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {TokenType, type Position, type Token} from '../../../src/index.js';
+import {TokenType, translateSource, type Language, type Position, type Token} from '../../../src/index.js';
 import {DEFAULT_EXAMPLE, EXAMPLES} from '../constants/examples';
 import type {TabId} from '../constants/tabs';
 import type {CodeEditorHandle} from '../features/editor/organisms/CodeEditor';
@@ -13,14 +13,22 @@ import {useShareLink} from './useShareLink';
 const customExampleId = 'propio';
 
 // Programa inicial: el del enlace compartido o el ejemplo por defecto
-const initialProgram = (): SharedProgram => programFromHash(window.location.hash) ?? DEFAULT_EXAMPLE;
+const initialProgram = (): SharedProgram => programFromHash(window.location.hash) ?? {...DEFAULT_EXAMPLE, language: 'es'};
 
 // Indica si el programa usa `leer`, para mostrar el cuadro de entrada
 const usesRead = (tokens: Token[]): boolean => tokens.some((token) => token.type === TokenType.Identifier && token.lexeme === 'leer');
 
+// Código de un ejemplo en el idioma elegido
+const exampleSource = (source: string, language: Language): string => {
+  if (language === 'es') {
+    return source;
+  }
+  return translateSource(source, language);
+};
+
 // Indica qué ejemplo coincide con el código, o el código propio si ninguno
-const exampleIdFor = (source: string): string => {
-  const example = EXAMPLES.find((candidate) => candidate.source === source);
+const exampleIdFor = (source: string, language: Language): string => {
+  const example = EXAMPLES.find((candidate) => exampleSource(candidate.source, language) === source);
   if (example === undefined) {
     return customExampleId;
   }
@@ -30,11 +38,12 @@ const exampleIdFor = (source: string): string => {
 export const usePlayground = () => {
   const [source, setSource] = useState(() => initialProgram().source);
   const [input, setInput] = useState(() => initialProgram().input);
+  const [language, setLanguage] = useState<Language>(() => initialProgram().language);
   const [activeTab, setActiveTab] = useState<TabId>('output');
   const [stepIndex, setStepIndex] = useState(0);
   const [weaveKey, setWeaveKey] = useState(0);
   const editor = useRef<CodeEditorHandle>(null);
-  const analysis = useAnalysis(source);
+  const analysis = useAnalysis(source, language);
   const {mode, setMode, execution, running, execute} = useExecution();
   const {share, message: shareMessage} = useShareLink();
 
@@ -44,6 +53,7 @@ export const usePlayground = () => {
       if (shared !== null) {
         setSource(shared.source);
         setInput(shared.input);
+        setLanguage(shared.language);
       }
     };
     window.addEventListener('hashchange', loadFromHash);
@@ -51,6 +61,7 @@ export const usePlayground = () => {
   }, []);
 
   const blocking = useMemo(() => blockingDiagnostics(analysis), [analysis]);
+  const exampleId = useMemo(() => exampleIdFor(source, language), [source, language]);
   let currentExecution = null;
   if (execution !== null && execution.source === source && execution.input === input && execution.mode === mode) {
     currentExecution = execution;
@@ -76,7 +87,7 @@ export const usePlayground = () => {
   }
 
   const runProgram = useCallback(async () => {
-    await execute(source, input, mode);
+    await execute(source, input, mode, language);
     setWeaveKey((key) => key + 1);
     setStepIndex(0);
     setActiveTab((tab) => {
@@ -85,23 +96,28 @@ export const usePlayground = () => {
       }
       return 'output';
     });
-  }, [execute, source, input, mode]);
+  }, [execute, source, input, mode, language]);
 
   const runStepper = useCallback(async () => {
     setMode('interpreter');
-    await execute(source, input, 'interpreter');
+    await execute(source, input, 'interpreter', language);
     setWeaveKey((key) => key + 1);
     setStepIndex(0);
     setActiveTab('stepper');
-  }, [execute, setMode, source, input]);
+  }, [execute, setMode, source, input, language]);
 
   const selectExample = useCallback((id: string) => {
     const example = EXAMPLES.find((candidate) => candidate.id === id);
     if (example !== undefined) {
-      setSource(example.source);
+      setSource(exampleSource(example.source, language));
       setInput(example.input);
       window.history.replaceState(null, '', window.location.pathname);
     }
+  }, [language]);
+
+  const changeLanguage = useCallback((next: Language) => {
+    setSource((current) => translateSource(current, next));
+    setLanguage(next);
   }, []);
 
   const selectPosition = useCallback((position: Position) => {
@@ -136,12 +152,14 @@ export const usePlayground = () => {
     changeStep,
     stepLine,
     editorDiagnostics,
-    exampleId: exampleIdFor(source),
+    exampleId,
+    language,
+    changeLanguage,
     selectExample,
     selectPosition,
     runProgram,
     runStepper,
-    share: () => share({source, input}),
+    share: () => share({source, input, language}),
     shareMessage,
   };
 };

@@ -1,9 +1,14 @@
+import type {Language} from '../../../src/index.js';
+
 const sourceKey = 'codigo';
 const inputKey = 'entrada';
+const languageKey = 'idioma';
+const quechuaValue = 'runasimi';
 
 export interface SharedProgram {
   source: string;
   input: string;
+  language: Language;
 }
 
 // Convierte el código en texto seguro para la dirección, pasando por UTF-8 para conservar tildes y eñes
@@ -41,7 +46,11 @@ export const programFromHash = (hash: string): SharedProgram | null => {
   if (encodedInput !== null) {
     input = decodeSource(encodedInput) ?? '';
   }
-  return {source, input};
+  let language: Language = 'es';
+  if (params.get(languageKey) === quechuaValue) {
+    language = 'qu';
+  }
+  return {source, input, language};
 };
 
 // Arma el enlace que abre el playground con el código y la entrada indicados
@@ -49,6 +58,9 @@ export const shareUrl = (location: Location, program: SharedProgram): string => 
   let hash = `#${sourceKey}=${encodeSource(program.source)}`;
   if (program.input !== '') {
     hash += `&${inputKey}=${encodeSource(program.input)}`;
+  }
+  if (program.language === 'qu') {
+    hash += `&${languageKey}=${quechuaValue}`;
   }
   return `${location.origin}${location.pathname}${hash}`;
 };

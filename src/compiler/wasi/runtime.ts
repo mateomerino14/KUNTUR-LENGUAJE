@@ -129,36 +129,38 @@ const failFunction = (name: string, params: [string, ValueType][], pieces: Piece
     (call $fail_end)`,
 });
 
+type Localize = (message: string) => string;
+
 const numberArg = (arg: string): Piece => ({arg, kind: 'number'});
 const textArg = (arg: string): Piece => ({arg, kind: 'text'});
 
 // Funciones que informan cada error de ejecución, armadas con los mismos mensajes del intérprete
-const failFunctions = (maxSteps: number): RuntimeFunction[] => [
-  failFunction('fail_division_by_zero', [], [divisionByZeroMessage]),
-  failFunction('fail_zero_step', [], [zeroStepMessage]),
-  failFunction('fail_too_many_steps', [], [tooManyStepsMessage(maxSteps)]),
-  failFunction('fail_no_more_input', [], [noMoreInputMessage]),
-  failFunction('fail_empty_pop', [], [emptyListPopMessage]),
-  failFunction('fail_too_deep', [['$name', 'i32']], messagePieces(tooDeepMessage(marker(0)), [textArg('$name')])),
-  failFunction('fail_not_declared', [['$name', 'i32']], messagePieces(notDeclaredMessage(marker(0)), [textArg('$name')])),
-  failFunction('fail_assign_not_declared', [['$name', 'i32']], messagePieces(undeclaredAssignmentMessage(marker(0)), [textArg('$name')])),
-  failFunction('fail_empty_index', [['$index', 'f64']], messagePieces(emptyIndexMessage(marker(0)), [numberArg('$index')])),
+const failFunctions = (maxSteps: number, localize: Localize): RuntimeFunction[] => [
+  failFunction('fail_division_by_zero', [], [localize(divisionByZeroMessage)]),
+  failFunction('fail_zero_step', [], [localize(zeroStepMessage)]),
+  failFunction('fail_too_many_steps', [], [localize(tooManyStepsMessage(maxSteps))]),
+  failFunction('fail_no_more_input', [], [localize(noMoreInputMessage)]),
+  failFunction('fail_empty_pop', [], [localize(emptyListPopMessage)]),
+  failFunction('fail_too_deep', [['$name', 'i32']], messagePieces(localize(tooDeepMessage(marker(0))), [textArg('$name')])),
+  failFunction('fail_not_declared', [['$name', 'i32']], messagePieces(localize(notDeclaredMessage(marker(0))), [textArg('$name')])),
+  failFunction('fail_assign_not_declared', [['$name', 'i32']], messagePieces(localize(undeclaredAssignmentMessage(marker(0))), [textArg('$name')])),
+  failFunction('fail_empty_index', [['$index', 'f64']], messagePieces(localize(emptyIndexMessage(marker(0))), [numberArg('$index')])),
   {
     ...failFunction(
       'fail_index_range',
       [['$index', 'f64'], ['$length', 'f64']],
-      messagePieces(indexOutOfRangeMessage(marker(0), marker(1), marker(2)), [numberArg('$index'), numberArg('$length'), numberArg('$last')]),
+      messagePieces(localize(indexOutOfRangeMessage(marker(0), marker(1), marker(2))), [numberArg('$index'), numberArg('$length'), numberArg('$last')]),
       '(local.set $last (f64.sub (local.get $length) (f64.const 1)))',
     ),
     locals: [['$last', 'f64']],
   },
-  failFunction('fail_missing_key', [['$quoted', 'i32']], messagePieces(missingKeyMessage(marker(0)), [textArg('$quoted')])),
-  failFunction('fail_invalid_number', [['$quoted', 'i32']], messagePieces(invalidNumberMessage(marker(0)), [textArg('$quoted')])),
-  failFunction('fail_negative_root', [['$number', 'f64']], messagePieces(negativeRootMessage(marker(0)), [numberArg('$number')])),
+  failFunction('fail_missing_key', [['$quoted', 'i32']], messagePieces(localize(missingKeyMessage(marker(0))), [textArg('$quoted')])),
+  failFunction('fail_invalid_number', [['$quoted', 'i32']], messagePieces(localize(invalidNumberMessage(marker(0))), [textArg('$quoted')])),
+  failFunction('fail_negative_root', [['$number', 'f64']], messagePieces(localize(negativeRootMessage(marker(0))), [numberArg('$number')])),
   failFunction(
     'fail_reversed_random',
     [['$high', 'f64'], ['$low', 'f64']],
-    messagePieces(reversedRandomMessage(marker(0), marker(1)), [numberArg('$high'), numberArg('$low')]),
+    messagePieces(localize(reversedRandomMessage(marker(0), marker(1))), [numberArg('$high'), numberArg('$low')]),
   ),
 ];
 
@@ -969,4 +971,6 @@ const coreFunctions: RuntimeFunction[] = [
 ];
 
 // Funciones del runtime independiente; el límite de pasos se escribe dentro de su mensaje
-export const runtimeFunctions = (maxSteps: number): RuntimeFunction[] => [...coreFunctions, ...failFunctions(maxSteps)];
+export const runtimeFunctions = (maxSteps: number, localize: Localize = (message) => message): RuntimeFunction[] => {
+  return [...coreFunctions, ...failFunctions(maxSteps, localize)];
+};

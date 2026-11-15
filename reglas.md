@@ -97,6 +97,7 @@ src/
 ├── checker/        Revisión de nombres y tipos antes de ejecutar
 ├── interpreter/    Ejecución directa del AST
 ├── exercises/      Catálogo de ejercicios y su corrección
+├── language/       Vocabulario en quechua y traducción entre idiomas
 ├── compiler/       Traducción a WebAssembly y funciones del anfitrión
 │   ├── wasm/       Codificación binaria y de texto de los módulos, y el ensamblador
 │   └── wasi/       Runtime del WebAssembly independiente

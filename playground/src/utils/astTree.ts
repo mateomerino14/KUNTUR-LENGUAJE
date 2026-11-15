@@ -1,6 +1,8 @@
 import {
+  toQuechua,
   typeToString,
   type Expression,
+  type Language,
   type Position,
   type Program,
   type Statement,
@@ -56,18 +58,30 @@ const booleanText = (value: boolean): string => {
   return 'falso';
 };
 
+const textLabel = 'Texto';
+
 class TreeBuilder {
   private readonly types: TypeInfo | null;
+  private readonly language: Language;
   private nextId = 0;
 
-  constructor(types: TypeInfo | null) {
+  constructor(types: TypeInfo | null, language: Language) {
     this.types = types;
+    this.language = language;
+  }
+
+  // Escribe el detalle de un nodo con las palabras del lenguaje en el idioma del programa
+  code(label: string, detail: string | null): string | null {
+    if (detail === null || label === textLabel || this.language === 'es') {
+      return detail;
+    }
+    return detail.replace(/[\p{L}_][\p{L}\p{N}_]*/gu, (word) => toQuechua(word));
   }
 
   // Crea un nodo con un identificador único
   node(role: string | null, label: string, detail: string | null, position: Position | null, children: DisplayNode[], typeLabel: string | null = null): DisplayNode {
     this.nextId++;
-    return {id: `nodo-${this.nextId}`, role, label, detail, typeLabel, position, children};
+    return {id: `nodo-${this.nextId}`, role, label, detail: this.code(label, detail), typeLabel, position, children};
   }
 
   // Convierte el programa completo
@@ -196,4 +210,6 @@ class TreeBuilder {
 }
 
 // Convierte el árbol de sintaxis en nodos para mostrar, con el papel de cada hijo y su tipo
-export const toDisplayTree = (program: Program, types: TypeInfo | null): DisplayNode => new TreeBuilder(types).program(program);
+export const toDisplayTree = (program: Program, types: TypeInfo | null, language: Language = 'es'): DisplayNode => {
+  return new TreeBuilder(types, language).program(program);
+};

@@ -5,6 +5,7 @@ import {encodeModule} from './compiler/wasm/module.js';
 import {moduleToText} from './compiler/wasm/text.js';
 import type {Diagnostic} from './errors/diagnostic.js';
 import {interpret} from './interpreter/interpreter.js';
+import {localizeMessage, type Language} from './language/quechua.js';
 import {tokenize} from './lexer/lexer.js';
 import type {ReadLine} from './interpreter/builtins.js';
 import type {StepListener} from './interpreter/trace.js';
@@ -29,6 +30,13 @@ export type {ReadLine} from './interpreter/builtins.js';
 export type {TypeInfo} from './checker/checker.js';
 export type {Type} from './checker/types.js';
 export {typeToString} from './checker/types.js';
+export {LANGUAGES, localizeMessage, QUECHUA_WORDS, toQuechua} from './language/quechua.js';
+export type {Language} from './language/quechua.js';
+export {translateSource} from './language/translate.js';
+
+export interface SourceOptions {
+  language?: Language;
+}
 
 export interface ParseSourceResult {
   program: Program | null;
@@ -41,7 +49,7 @@ export interface CheckSourceResult {
   diagnostics: Diagnostic[];
 }
 
-export interface CompileSourceOptions {
+export interface CompileSourceOptions extends SourceOptions {
   maxSteps?: number;
   target?: CompileTarget;
 }
@@ -52,7 +60,7 @@ export interface CompileSourceResult {
   diagnostics: Diagnostic[];
 }
 
-export interface RunOptions {
+export interface RunOptions extends SourceOptions {
   write?: (line: string) => void;
   onStep?: StepListener;
   maxSteps?: number;
@@ -65,41 +73,49 @@ export interface RunResult {
   diagnostics: Diagnostic[];
 }
 
+// Pasa al idioma del programa las palabras del lenguaje que mencionan los errores
+const localize = (diagnostics: Diagnostic[], language: Language | undefined): Diagnostic[] => {
+  if (language === undefined || language === 'es') {
+    return diagnostics;
+  }
+  return diagnostics.map((diagnostic) => ({...diagnostic, message: localizeMessage(diagnostic.message, language)}));
+};
+
 // Analiza el código fuente hasta el árbol de sintaxis; si hay errores léxicos no sigue al parser
-export const parse = (source: string): ParseSourceResult => {
-  const lexed = tokenize(source);
+export const parse = (source: string, options: SourceOptions = {}): ParseSourceResult => {
+  const lexed = tokenize(source, options.language);
   if (lexed.diagnostics.length > 0) {
     return {program: null, diagnostics: lexed.diagnostics};
   }
   const parsed = parseTokens(lexed.tokens);
   if (parsed.diagnostics.length > 0) {
-    return {program: null, diagnostics: parsed.diagnostics};
+    return {program: null, diagnostics: localize(parsed.diagnostics, options.language)};
   }
   return {program: parsed.program, diagnostics: []};
 };
 
 // Analiza el código fuente y revisa sus nombres y tipos, sin ejecutarlo
-export const check = (source: string): CheckSourceResult => {
-  const parsed = parse(source);
+export const check = (source: string, options: SourceOptions = {}): CheckSourceResult => {
+  const parsed = parse(source, options);
   if (parsed.program === null) {
     return {program: null, types: null, diagnostics: parsed.diagnostics};
   }
   const checked = checkProgram(parsed.program);
   if (checked.diagnostics.length > 0) {
-    return {program: null, types: null, diagnostics: checked.diagnostics};
+    return {program: null, types: null, diagnostics: localize(checked.diagnostics, options.language)};
   }
   return {program: parsed.program, types: checked.types, diagnostics: []};
 };
 
 // Compila el código fuente a WebAssembly, en binario y en texto
 export const compile = (source: string, options: CompileSourceOptions = {}): CompileSourceResult => {
-  const checked = check(source);
+  const checked = check(source, options);
   if (checked.program === null) {
     return {binary: null, text: null, diagnostics: checked.diagnostics};
   }
   const compiled = compileProgram(checked.program, checked.types!, options);
   if (compiled.module === null) {
-    return {binary: null, text: null, diagnostics: compiled.diagnostics};
+    return {binary: null, text: null, diagnostics: localize(compiled.diagnostics, options.language)};
   }
   return {binary: encodeModule(compiled.module), text: moduleToText(compiled.module), diagnostics: []};
 };
@@ -107,7 +123,7 @@ export const compile = (source: string, options: CompileSourceOptions = {}): Com
 // Compila el código fuente a WebAssembly y lo ejecuta
 export const runCompiled = async (source: string, options: RunOptions = {}): Promise<RunResult> => {
   const output: string[] = [];
-  const compiled = compile(source, {maxSteps: options.maxSteps});
+  const compiled = compile(source, {maxSteps: options.maxSteps, language: options.language});
   if (compiled.binary === null) {
     return {output, diagnostics: compiled.diagnostics};
   }
@@ -116,13 +132,13 @@ export const runCompiled = async (source: string, options: RunOptions = {}): Pro
     options.write?.(line);
   };
   const diagnostics = await runWasm(compiled.binary, {write, maxSteps: options.maxSteps, random: options.random, read: options.read});
-  return {output, diagnostics};
+  return {output, diagnostics: localize(diagnostics, options.language)};
 };
 
 // Analiza, revisa y ejecuta el código fuente, devolviendo lo mostrado y los errores
 export const run = (source: string, options: RunOptions = {}): RunResult => {
   const output: string[] = [];
-  const checked = check(source);
+  const checked = check(source, options);
   if (checked.program === null) {
     return {output, diagnostics: checked.diagnostics};
   }
@@ -137,5 +153,5 @@ export const run = (source: string, options: RunOptions = {}): RunResult => {
     read: options.read,
     onStep: options.onStep,
   });
-  return {output, diagnostics: result.diagnostics};
+  return {output, diagnostics: localize(result.diagnostics, options.language)};
 };
