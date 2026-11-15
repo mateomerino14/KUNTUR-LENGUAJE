@@ -32,6 +32,7 @@ export const infixPrecedences: ReadonlyMap<TokenType, Precedence> = new Map([
   [TokenType.Percent, Precedence.Factor],
   [TokenType.LeftParen, Precedence.Call],
   [TokenType.LeftBracket, Precedence.Call],
+  [TokenType.Dot, Precedence.Call],
 ]);
 
 export const binaryOperators: ReadonlyMap<TokenType, BinaryOperator> = new Map<TokenType, BinaryOperator>([

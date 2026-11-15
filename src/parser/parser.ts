@@ -3,6 +3,7 @@ import {describeToken, TokenType, type Token} from '../lexer/token.js';
 import type {
   Block,
   DictEntry,
+  RecordField,
   Expression,
   FunctionDeclaration,
   If,
@@ -33,6 +34,7 @@ const statementStarters: ReadonlySet<TokenType> = new Set([
 
 const containerTypeNames = new Set(['lista', 'diccionario']);
 const eachWord = 'cada';
+const recordWord = 'registro';
 const inWord = 'en';
 const listElementWord = 'de';
 
@@ -112,6 +114,9 @@ class Parser {
       case TokenType.Else:
         throw this.error('`sino` debe ir justo después del bloque de un `si`.', token.position);
       default:
+        if (token.lexeme === recordWord && this.peekAt(1).type === TokenType.Identifier && this.peekAt(2).type === TokenType.LeftBrace) {
+          return this.parseRecordDeclaration();
+        }
         return this.parseExpressionStatement();
     }
   }
@@ -287,6 +292,40 @@ class Parser {
     return {kind: 'ForEach', variable: variable.lexeme, iterable, body, position: keyword.position};
   }
 
+  // Analiza `registro Nombre { campo: tipo ... }`, con un campo por línea o separados por comas
+  private parseRecordDeclaration(): Statement {
+    const keyword = this.advance();
+    const name = this.advance();
+    const open = this.advance();
+    const fields: RecordField[] = [];
+    this.skipFieldSeparators();
+    while (!this.check(TokenType.RightBrace) && !this.isAtEnd()) {
+      const field = this.consumeFieldName('Cada campo del registro lleva su nombre y su tipo, por ejemplo: `nombre: texto`.');
+      this.consume(TokenType.Colon, `El campo \`${field.lexeme}\` necesita su tipo, por ejemplo: \`${field.lexeme}: texto\`.`);
+      const typeAnnotation = this.parseType('Después de `:` va el nombre de un tipo, por ejemplo: `entero`.');
+      fields.push({name: field.lexeme, typeAnnotation, position: field.position});
+      this.skipFieldSeparators();
+    }
+    this.consumeClosing(TokenType.RightBrace, '}', open);
+    return {kind: 'RecordDeclaration', name: name.lexeme, fields, position: keyword.position};
+  }
+
+  // Exige el nombre de un campo y aclara cuando se usó una palabra reservada
+  private consumeFieldName(message: string): Token {
+    const token = this.peek();
+    if (token.type !== TokenType.Identifier && /^\p{L}+$/u.test(token.lexeme)) {
+      throw this.error(`\`${token.lexeme}\` es una palabra reservada de Kuntur y no puede ser nombre de un campo.`, token.position);
+    }
+    return this.consume(TokenType.Identifier, message);
+  }
+
+  // Salta saltos de línea y comas entre los campos de un registro
+  private skipFieldSeparators(): void {
+    while (this.match(TokenType.Newline) || this.match(TokenType.Comma)) {
+      // Nada que hacer: solo se consumen
+    }
+  }
+
   // Analiza el cuerpo de un ciclo, donde se permiten `romper` y `continuar`
   private parseLoopBody(message: string): Block {
     this.loopDepth++;
@@ -432,6 +471,10 @@ class Parser {
         return {kind: 'Call', callee: left, args: this.parseArguments(), position: left.position};
       case TokenType.LeftBracket:
         return this.parseIndex(left, operator);
+      case TokenType.Dot: {
+        const name = this.consumeFieldName('Después de `.` va el nombre de un campo, por ejemplo: `alumno.nombre`.');
+        return {kind: 'Field', target: left, name: name.lexeme, position: name.position};
+      }
       default:
         return {
           kind: 'Binary',
@@ -446,7 +489,7 @@ class Parser {
   // Analiza una asignación, que agrupa de derecha a izquierda
   private parseAssignment(target: Expression, operator: Token): Expression {
     const value = this.parseExpression(Precedence.Assignment);
-    if (target.kind !== 'Variable' && target.kind !== 'Index') {
+    if (target.kind !== 'Variable' && target.kind !== 'Index' && target.kind !== 'Field') {
       throw this.error('Solo se puede asignar a una variable o a una posición de una lista.', operator.position);
     }
     return {kind: 'Assign', target, value, position: operator.position};

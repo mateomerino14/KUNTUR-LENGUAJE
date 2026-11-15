@@ -94,9 +94,16 @@ export interface Index {
   position: Position;
 }
 
+export interface Field {
+  kind: 'Field';
+  target: Expression;
+  name: string;
+  position: Position;
+}
+
 export interface Assign {
   kind: 'Assign';
-  target: Variable | Index;
+  target: Variable | Index | Field;
   value: Expression;
   position: Position;
 }
@@ -108,6 +115,7 @@ export type Expression =
   | NullLiteral
   | ListLiteral
   | DictLiteral
+  | Field
   | Variable
   | Unary
   | Binary
@@ -179,6 +187,19 @@ export interface ForEach {
   position: Position;
 }
 
+export interface RecordField {
+  name: string;
+  typeAnnotation: TypeAnnotation;
+  position: Position;
+}
+
+export interface RecordDeclaration {
+  kind: 'RecordDeclaration';
+  name: string;
+  fields: RecordField[];
+  position: Position;
+}
+
 export interface Break {
   kind: 'Break';
   position: Position;
@@ -209,6 +230,7 @@ export type Statement =
   | While
   | For
   | ForEach
+  | RecordDeclaration
   | Break
   | Continue
   | Block
