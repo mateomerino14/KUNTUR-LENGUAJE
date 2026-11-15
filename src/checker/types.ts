@@ -9,6 +9,11 @@ export interface ListType {
   element: Type;
 }
 
+export interface DictType {
+  kind: 'dict';
+  element: Type;
+}
+
 export interface FunctionType {
   kind: 'function';
   name: string;
@@ -17,7 +22,7 @@ export interface FunctionType {
   returns: Type;
 }
 
-export type Type = PrimitiveType | ListType | FunctionType;
+export type Type = PrimitiveType | ListType | DictType | FunctionType;
 
 export const integerType: PrimitiveType = {kind: 'integer'};
 export const decimalType: PrimitiveType = {kind: 'decimal'};
@@ -35,6 +40,7 @@ export const typeNames: ReadonlyMap<string, Type> = new Map([
 ]);
 
 export const listTypeName = 'lista';
+export const dictTypeName = 'diccionario';
 
 const primitiveNames: Readonly<Record<PrimitiveKind, string>> = {
   integer: 'entero',
@@ -57,8 +63,17 @@ const primitiveDescriptions: Readonly<Record<PrimitiveKind, string>> = {
 // Crea el tipo de una lista con el tipo de sus elementos
 export const listOf = (element: Type): ListType => ({kind: 'list', element});
 
+// Crea el tipo de un diccionario con el tipo de sus valores; las claves siempre son textos
+export const dictOf = (element: Type): DictType => ({kind: 'dict', element});
+
 // Escribe el tipo como se anota en Kuntur
 export const typeToString = (type: Type): string => {
+  if (type.kind === 'dict') {
+    if (type.element.kind === 'unknown') {
+      return 'diccionario';
+    }
+    return `diccionario de ${typeToString(type.element)}`;
+  }
   if (type.kind === 'list') {
     if (type.element.kind === 'unknown') {
       return 'lista';
@@ -75,6 +90,9 @@ export const typeToString = (type: Type): string => {
 export const describeType = (type: Type): string => {
   if (type.kind === 'list') {
     return `una ${typeToString(type)}`;
+  }
+  if (type.kind === 'dict') {
+    return `un ${typeToString(type)}`;
   }
   if (type.kind === 'function') {
     return 'una función';
@@ -104,7 +122,7 @@ export const isAssignable = (target: Type, source: Type): boolean => {
   if (target.kind === 'decimal' && source.kind === 'integer') {
     return true;
   }
-  if (target.kind === 'list' && source.kind === 'list') {
+  if ((target.kind === 'list' && source.kind === 'list') || (target.kind === 'dict' && source.kind === 'dict')) {
     // Las listas deben coincidir en sus elementos: una lista de entero no es una lista de decimal
     if (isUnknown(target.element) || isUnknown(source.element)) {
       return true;

@@ -218,7 +218,7 @@ describe('funciones', () => {
 
   // Las funciones propias revisan sus argumentos
   test('revisa los argumentos de las funciones propias', () => {
-    expect(onlyMessage('mostrar(longitud(5))')).toBe('`longitud` necesita una lista o un texto, pero recibió un entero.');
+    expect(onlyMessage('mostrar(longitud(5))')).toBe('`longitud` necesita una lista, un texto o un diccionario, pero recibió un entero.');
     expect(onlyMessage('mostrar(aleatorio(1, 2.5))')).toBe('`aleatorio` necesita un entero, pero recibió un decimal.');
   });
 

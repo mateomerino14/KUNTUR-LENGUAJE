@@ -83,3 +83,13 @@ export const notDeclaredMessage = (name: string): string => `\`${name}\` no exis
 export const forEachTargetMessage = (description: string): string => {
   return `\`para cada\` recorre listas, textos o diccionarios, pero aquí hay ${description}.`;
 };
+
+// Error al leer una clave que el diccionario no tiene
+export const missingKeyMessage = (quotedKey: string): string => {
+  return `El diccionario no tiene la clave ${quotedKey}. Usa \`tiene(diccionario, clave)\` para revisar antes de leerla.`;
+};
+
+// Error al usar como clave algo que no es un texto
+export const dictKeyMessage = (description: string): string => {
+  return `Las claves de un diccionario son textos, pero aquí hay ${description}.`;
+};

@@ -1,6 +1,7 @@
 import {createDiagnostic, type Diagnostic, type Position} from '../errors/diagnostic.js';
 import {
   arityMessage,
+  dictKeyMessage,
   forEachTargetMessage,
   readOnlyMessage,
   redeclarationMessage,
@@ -13,6 +14,7 @@ import type {
   Binary,
   Call,
   Expression,
+  DictLiteral,
   For,
   ForEach,
   FunctionDeclaration,
@@ -41,6 +43,8 @@ import {
   isUnknown,
   listOf,
   listTypeName,
+  dictTypeName,
+  dictOf,
   nullType,
   numericResult,
   textType,
@@ -83,6 +87,7 @@ const initialValueExamples: Readonly<Record<string, string>> = {
   text: '""',
   boolean: 'falso',
   list: '[]',
+  dict: '{}',
 };
 
 // Ordena los diagnósticos por línea y luego por columna
@@ -276,8 +281,22 @@ class Checker {
     });
   }
 
-  // Tipo de una expresión cuando se conoce el tipo esperado; en listas escritas revisa cada elemento
+  // Tipo de una expresión cuando se conoce el tipo esperado; en listas y diccionarios escritos revisa cada elemento
   private typeOfExpected(expression: Expression, expected: Type | null, scope: Scope): Type {
+    if (expected !== null && expected.kind === 'dict' && expression.kind === 'DictLiteral') {
+      for (const entry of expression.entries) {
+        this.requireKey(this.typeOf(entry.key, scope), entry.key.position);
+        const valueType = this.typeOfExpected(entry.value, expected.element, scope);
+        if (!isAssignable(expected.element, valueType)) {
+          this.report(
+            `Este diccionario es de ${typeToString(expected.element)}; no se le puede guardar ${describeType(valueType)}.`,
+            entry.value.position,
+          );
+        }
+      }
+      this.types.expressions.set(expression, expected);
+      return expected;
+    }
     if (expected === null || expected.kind !== 'list' || expression.kind !== 'ListLiteral') {
       return this.typeOf(expression, scope);
     }
@@ -331,12 +350,18 @@ class Checker {
       }
       return listOf(this.resolveAnnotation(annotation.element));
     }
+    if (annotation.name === dictTypeName) {
+      if (annotation.element === null) {
+        return dictOf(unknownType);
+      }
+      return dictOf(this.resolveAnnotation(annotation.element));
+    }
     const type = typeNames.get(annotation.name);
     if (type === undefined) {
       const message = withSuggestion(
-        `El tipo \`${annotation.name}\` no existe; los tipos son \`entero\`, \`decimal\`, \`texto\`, \`logico\` y \`lista de ...\`.`,
+        `El tipo \`${annotation.name}\` no existe; los tipos son \`entero\`, \`decimal\`, \`texto\`, \`logico\`, \`lista de ...\` y \`diccionario de ...\`.`,
         annotation.name,
-        [...typeNames.keys(), listTypeName],
+        [...typeNames.keys(), listTypeName, dictTypeName],
       );
       this.report(message, annotation.position);
       return unknownType;
@@ -492,7 +517,7 @@ class Checker {
     if (iterableType.kind === 'list') {
       variableType = iterableType.element;
     }
-    else if (iterableType.kind === 'text') {
+    else if (iterableType.kind === 'text' || iterableType.kind === 'dict') {
       variableType = textType;
     }
     else if (!isUnknown(iterableType)) {
@@ -555,6 +580,8 @@ class Checker {
         return nullType;
       case 'ListLiteral':
         return this.typeOfList(expression.elements, scope);
+      case 'DictLiteral':
+        return this.typeOfDict(expression, scope);
       case 'Variable':
         return this.typeOfVariable(expression.name, scope, expression.position);
       case 'Assign':
@@ -579,6 +606,18 @@ class Checker {
       return listOf(unknownType);
     }
     return listOf(types.reduce(commonType));
+  }
+
+  // Tipo de un diccionario literal: el común a sus valores; las claves deben ser textos
+  private typeOfDict(expression: DictLiteral, scope: Scope): Type {
+    const types = expression.entries.map((entry) => {
+      this.requireKey(this.typeOf(entry.key, scope), entry.key.position);
+      return this.typeOf(entry.value, scope);
+    });
+    if (types.length === 0) {
+      return dictOf(unknownType);
+    }
+    return dictOf(types.reduce(commonType));
   }
 
   // Tipo de un nombre; si no existe sugiere el más parecido
@@ -629,14 +668,25 @@ class Checker {
   // Revisa la asignación a `lista[posicion]`
   private checkIndexAssign(target: Index, valueType: Type, scope: Scope): void {
     const containerType = this.typeOf(target.target, scope);
-    this.requireIndex(this.typeOf(target.index, scope), target.index.position);
+    const indexType = this.typeOf(target.index, scope);
+    if (containerType.kind === 'dict') {
+      this.requireKey(indexType, target.index.position);
+      if (!isAssignable(containerType.element, valueType)) {
+        this.report(
+          `Este diccionario es de ${typeToString(containerType.element)}; no se le puede guardar ${describeType(valueType)}.`,
+          target.position,
+        );
+      }
+      return;
+    }
+    this.requireIndex(indexType, target.index.position);
     if (containerType.kind === 'text') {
       this.report('Los textos no se pueden modificar por posición; arma un texto nuevo.', target.position);
       return;
     }
     if (containerType.kind !== 'list') {
       if (!isUnknown(containerType)) {
-        this.report(`Solo se puede asignar por posición en una lista, pero aquí hay ${describeType(containerType)}.`, target.position);
+        this.report(`Solo se puede asignar por posición en una lista o por clave en un diccionario, pero aquí hay ${describeType(containerType)}.`, target.position);
       }
       return;
     }
@@ -817,7 +867,12 @@ class Checker {
   // Tipo de `lista[posicion]` o `texto[posicion]`
   private typeOfIndex(expression: Index, scope: Scope): Type {
     const containerType = this.typeOf(expression.target, scope);
-    this.requireIndex(this.typeOf(expression.index, scope), expression.index.position);
+    const indexType = this.typeOf(expression.index, scope);
+    if (containerType.kind === 'dict') {
+      this.requireKey(indexType, expression.index.position);
+      return containerType.element;
+    }
+    this.requireIndex(indexType, expression.index.position);
     if (containerType.kind === 'list') {
       return containerType.element;
     }
@@ -826,11 +881,18 @@ class Checker {
     }
     if (!isUnknown(containerType)) {
       this.report(
-        `Solo se puede acceder por posición a listas y textos, pero aquí hay ${describeType(containerType)}.`,
+        `Solo se puede acceder por posición a listas y textos, o por clave a diccionarios, pero aquí hay ${describeType(containerType)}.`,
         expression.position,
       );
     }
     return unknownType;
+  }
+
+  // Exige que la clave de un diccionario sea un texto
+  private requireKey(type: Type, position: Position): void {
+    if (!isTextLike(type)) {
+      this.report(dictKeyMessage(describeType(type)), position);
+    }
   }
 
   // Exige que la posición sea un entero
