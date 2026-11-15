@@ -21,6 +21,7 @@ import type {
 } from '../parser/ast.js';
 import {hostModuleName, hostSignatures, type HostFunctionName} from './host.js';
 import {namesUsedInFunctions} from './references.js';
+import {localizeMessage, type Language} from '../language/quechua.js';
 import {LAYOUT, RUNTIME_GLOBALS, runtimeFunctions, TAGS, TEXT_HEADER_SIZE, WASI_IMPORTS, WASI_MODULE} from './wasi/runtime.js';
 import {assembleBody} from './wasm/assembler.js';
 import {utf8Bytes} from './wasm/encoding.js';
@@ -33,6 +34,7 @@ export interface CompileOptions {
   maxSteps?: number;
   maxCallDepth?: number;
   target?: CompileTarget;
+  language?: Language;
 }
 
 export interface CompileResult {
@@ -223,6 +225,7 @@ class CodeGenerator {
   private readonly imports: ImportedFunction[] = [];
   private readonly importIndexes = new Map<string, number>();
   private readonly target: CompileTarget;
+  private readonly language: Language;
   private readonly refType: ValueType;
   private readonly runtimeIndexes = new Map<string, number>();
   private readonly runtimeGlobalIndexes = new Map<string, number>();
@@ -247,6 +250,7 @@ class CodeGenerator {
     this.maxSteps = options.maxSteps ?? defaultMaxSteps;
     this.maxCallDepth = options.maxCallDepth ?? defaultMaxCallDepth;
     this.target = options.target ?? 'browser';
+    this.language = options.language ?? 'es';
     this.refType = 'externref';
     if (this.target === 'wasi') {
       this.refType = 'i32';
@@ -276,7 +280,7 @@ class CodeGenerator {
 
   // Define las funciones del runtime independiente: primero sus índices, después sus cuerpos, que se llaman entre sí
   private defineWasiRuntime(): void {
-    const definitions = runtimeFunctions(this.maxSteps);
+    const definitions = runtimeFunctions(this.maxSteps, (message) => localizeMessage(message, this.language));
     for (const definition of definitions) {
       this.runtimeIndexes.set(definition.name, this.functions.length);
       this.functions.push({
