@@ -61,7 +61,9 @@ block                      ;; salida del ciclo (romper)
 end
 ```
 
-**Residuo.** WebAssembly no tiene residuo para `f64`, así que `a % b` se calcula como `a - b × trunc(a / b)`, que da lo mismo que en JavaScript.
+**Residuo.** WebAssembly no tiene residuo para `f64`, así que `a % b` se calcula como `a - b × trunc(a / b)`, la misma definición que usa JavaScript. Con decimales muy grandes o muy pequeños el redondeo puede diferir en el último dígito.
+
+**Variables globales usadas por funciones.** Una función se puede llamar antes de la línea que declara una variable global que usa. Para fallar igual que el intérprete, esas variables tienen una marca `<nombre>_declarada` que se revisa al leerlas o asignarlas dentro de una función.
 
 **Límites.** Cada vuelta de un ciclo llama a `contar_paso` y cada llamada a una función pasa por `entrar_llamada` y `salir_llamada`. Así un ciclo infinito o una recursión sin fin se detienen con el mismo mensaje que en el intérprete.
 
