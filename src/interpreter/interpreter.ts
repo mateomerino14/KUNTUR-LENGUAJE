@@ -17,6 +17,7 @@ import type {
   BinaryOperator,
   Call,
   Expression,
+  DictLiteral,
   For,
   ForEach,
   FunctionDeclaration,
@@ -31,10 +32,10 @@ import type {
 } from '../parser/ast.js';
 import {createBuiltins, noInput, type ReadLine} from './builtins.js';
 import {Environment, type Binding} from './environment.js';
-import {checkIndex} from './indexing.js';
+import {checkIndex, checkKey, readKey} from './indexing.js';
 import {RuntimeError} from './runtimeError.js';
 import {programFrameName, takeSnapshot, type StepListener} from './trace.js';
-import {describeType, isCallable, stringify, valuesEqual, type Callable, type UserFunction, type Value} from './values.js';
+import {describeType, isCallable, isDict, stringify, valuesEqual, type Callable, type Dict, type UserFunction, type Value} from './values.js';
 
 export interface InterpretOptions {
   write: (line: string) => void;
@@ -252,6 +253,10 @@ class Interpreter {
     if (typeof iterable === 'string') {
       return {length: () => iterable.length, at: (index) => iterable[index]};
     }
+    if (isDict(iterable)) {
+      const keys = [...iterable.keys()];
+      return {length: () => keys.length, at: (index) => keys[index]};
+    }
     throw new RuntimeError(forEachTargetMessage(describeType(iterable)), position);
   }
 
@@ -296,6 +301,8 @@ class Interpreter {
         return null;
       case 'ListLiteral':
         return expression.elements.map((element) => this.evaluate(element, scope));
+      case 'DictLiteral':
+        return this.evaluateDict(expression, scope);
       case 'Variable':
         return this.resolve(expression.name, scope, expression.position).value;
       case 'Assign':
@@ -311,6 +318,16 @@ class Interpreter {
       case 'Index':
         return this.evaluateIndex(expression, scope);
     }
+  }
+
+  // Arma un diccionario en el orden escrito; una clave repetida se queda con el último valor
+  private evaluateDict(expression: DictLiteral, scope: Environment): Dict {
+    const dict: Dict = new Map();
+    for (const entry of expression.entries) {
+      const key = checkKey(this.evaluate(entry.key, scope), entry.key.position);
+      dict.set(key, this.evaluate(entry.value, scope));
+    }
+    return dict;
   }
 
   // Busca un nombre y, si no existe, sugiere el más parecido
@@ -330,11 +347,15 @@ class Interpreter {
     if (target.kind === 'Index') {
       const list = this.evaluate(target.target, scope);
       const index = this.evaluate(target.index, scope);
+      if (isDict(list)) {
+        list.set(checkKey(index, target.position), value);
+        return value;
+      }
       if (typeof list === 'string') {
         throw new RuntimeError('Los textos no se pueden modificar por posición; arma un texto nuevo.', target.position);
       }
       if (!Array.isArray(list)) {
-        throw new RuntimeError(`Solo se puede asignar por posición en una lista, pero aquí hay ${describeType(list)}.`, target.position);
+        throw new RuntimeError(`Solo se puede asignar por posición en una lista o por clave en un diccionario, pero aquí hay ${describeType(list)}.`, target.position);
       }
       list[checkIndex(index, list.length, target.position)] = value;
       return value;
@@ -549,9 +570,12 @@ class Interpreter {
   private evaluateIndex(expression: Index, scope: Environment): Value {
     const target = this.evaluate(expression.target, scope);
     const index = this.evaluate(expression.index, scope);
+    if (isDict(target)) {
+      return readKey(target, index, expression.position);
+    }
     if (!Array.isArray(target) && typeof target !== 'string') {
       throw new RuntimeError(
-        `Solo se puede acceder por posición a listas y textos, pero aquí hay ${describeType(target)}.`,
+        `Solo se puede acceder por posición a listas y textos, o por clave a diccionarios, pero aquí hay ${describeType(target)}.`,
         expression.position,
       );
     }

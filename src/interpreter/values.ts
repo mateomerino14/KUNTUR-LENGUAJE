@@ -17,11 +17,16 @@ export interface NativeFunction {
 
 export type Callable = UserFunction | NativeFunction;
 
-export type Value = number | string | boolean | null | Value[] | Callable;
+export type Dict = Map<string, Value>;
+
+export type Value = number | string | boolean | null | Value[] | Dict | Callable;
+
+// Indica si el valor es un diccionario
+export const isDict = (value: Value): value is Dict => value instanceof Map;
 
 // Indica si el valor es una función del usuario o propia del lenguaje
 export const isCallable = (value: Value): value is Callable => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && !isDict(value);
 };
 
 // Nombre del tipo del valor, tal como lo ve quien programa en Kuntur
@@ -41,6 +46,9 @@ export const typeName = (value: Value): string => {
   if (Array.isArray(value)) {
     return 'lista';
   }
+  if (isDict(value)) {
+    return 'diccionario';
+  }
   return 'función';
 };
 
@@ -50,6 +58,7 @@ const typeDescriptions: Readonly<Record<string, string>> = {
   'texto': 'un texto',
   'lógico': 'un valor lógico',
   'lista': 'una lista',
+  'diccionario': 'un diccionario',
   'función': 'una función',
 };
 
@@ -65,7 +74,7 @@ const callableName = (callable: Callable): string => {
 };
 
 // Convierte un valor en texto; dentro de listas los textos van entre comillas
-const stringifyValue = (value: Value, nested: boolean, seen: Set<Value[]>): string => {
+const stringifyValue = (value: Value, nested: boolean, seen: Set<Value[] | Dict>): string => {
   if (value === null) {
     return 'nulo';
   }
@@ -93,6 +102,15 @@ const stringifyValue = (value: Value, nested: boolean, seen: Set<Value[]>): stri
     seen.delete(value);
     return `[${items.join(', ')}]`;
   }
+  if (isDict(value)) {
+    if (seen.has(value)) {
+      return '{...}';
+    }
+    seen.add(value);
+    const entries = [...value].map(([key, item]) => `${JSON.stringify(key)}: ${stringifyValue(item, true, seen)}`);
+    seen.delete(value);
+    return `{${entries.join(', ')}}`;
+  }
   return `<función ${callableName(value)}>`;
 };
 
@@ -102,8 +120,14 @@ export const stringify = (value: Value): string => stringifyValue(value, false, 
 // Convierte un valor en texto como se escribiría en el código, con los textos entre comillas
 export const stringifyLiteral = (value: Value): string => stringifyValue(value, true, new Set());
 
-// Compara dos valores; las listas se comparan elemento por elemento
+// Compara dos valores; las listas se comparan elemento por elemento y los diccionarios clave por clave
 export const valuesEqual = (left: Value, right: Value): boolean => {
+  if (isDict(left) && isDict(right)) {
+    if (left.size !== right.size) {
+      return false;
+    }
+    return [...left].every(([key, item]) => right.has(key) && valuesEqual(item, right.get(key)!));
+  }
   if (Array.isArray(left) && Array.isArray(right)) {
     if (left.length !== right.length) {
       return false;
