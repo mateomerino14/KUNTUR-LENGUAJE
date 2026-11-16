@@ -28,8 +28,9 @@ const readChunk = (buffer: Buffer): number => {
 export const createStdinReader = (output: NodeJS.WriteStream): ReadLine => {
   const buffer = Buffer.alloc(chunkSize);
   const decoder = new TextDecoder();
-  // Si la entrada viene de un archivo o una tubería, la respuesta no se ve: se repite para que la conversación se lea completa
-  const echoAnswers = !process.stdin.isTTY;
+  // Si la entrada viene de un archivo o una tubería, la respuesta no se ve: se repite para que la conversación se lea completa.
+  // Quien ya muestra lo que se escribe, como la terminal de la extensión de VS Code, lo apaga con KUNTUR_ECO=0
+  const echoAnswers = !process.stdin.isTTY && process.env.KUNTUR_ECO !== '0';
   let pending = '';
   let ended = false;
   return (prompt) => {

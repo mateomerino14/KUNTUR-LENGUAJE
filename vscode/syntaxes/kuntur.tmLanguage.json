@@ -1,0 +1,163 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Kuntur",
+  "scopeName": "source.kuntur",
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#record"
+    },
+    {
+      "include": "#function"
+    },
+    {
+      "include": "#foreach"
+    },
+    {
+      "include": "#constant-declaration"
+    },
+    {
+      "include": "#declaration"
+    },
+    {
+      "include": "#control"
+    },
+    {
+      "include": "#logical"
+    },
+    {
+      "include": "#constant"
+    },
+    {
+      "include": "#builtin"
+    },
+    {
+      "include": "#type"
+    },
+    {
+      "include": "#call"
+    },
+    {
+      "include": "#operator"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.double-slash.kuntur",
+      "match": "//.*$"
+    },
+    "string": {
+      "name": "string.quoted.double.kuntur",
+      "begin": "\"",
+      "end": "\"|$",
+      "patterns": [
+        {
+          "name": "constant.character.escape.kuntur",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "number": {
+      "name": "constant.numeric.kuntur",
+      "match": "\\b\\d+(?:\\.\\d+)?\\b"
+    },
+    "record": {
+      "match": "^\\s*(registro)\\s+([\\p{L}_](?:[\\p{L}\\p{N}_]|['’](?=\\p{L}))*)(?=\\s*\\{)",
+      "captures": {
+        "1": {
+          "name": "storage.type.record.kuntur"
+        },
+        "2": {
+          "name": "entity.name.type.kuntur"
+        }
+      }
+    },
+    "function": {
+      "match": "\\b(funcion|función|ruray)\\s+([\\p{L}_](?:[\\p{L}\\p{N}_]|['’](?=\\p{L}))*)",
+      "captures": {
+        "1": {
+          "name": "storage.type.function.kuntur"
+        },
+        "2": {
+          "name": "entity.name.function.kuntur"
+        }
+      }
+    },
+    "foreach": {
+      "match": "\\b(para|sapanka)\\s+(cada)\\s+([\\p{L}_](?:[\\p{L}\\p{N}_]|['’](?=\\p{L}))*)\\s+(en)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.kuntur"
+        },
+        "2": {
+          "name": "keyword.control.kuntur"
+        },
+        "3": {
+          "name": "variable.other.kuntur"
+        },
+        "4": {
+          "name": "keyword.control.kuntur"
+        }
+      }
+    },
+    "constant-declaration": {
+      "name": "storage.type.kuntur",
+      "match": "\\bmana\\s+tikraq\\b"
+    },
+    "declaration": {
+      "name": "storage.type.kuntur",
+      "match": "\\b(?:función|funcion|ruray|constante|var|kay)\\b"
+    },
+    "control": {
+      "name": "keyword.control.kuntur",
+      "match": "\\b(?:qallarispa|continuar|mientras|retornar|manachus|kutichiy|kaykama|sapanka|romper|sichus|p'akiy|desde|hasta|qatiy|sino|para|paso|kama|si)\\b"
+    },
+    "logical": {
+      "name": "keyword.operator.logical.kuntur",
+      "match": "\\b(?:chantapas|utaq|mana|no|y|o)\\b"
+    },
+    "constant": {
+      "name": "constant.language.kuntur",
+      "match": "\\b(?:verdadero|ch'usaq|cheqaq|llulla|falso|nulo)\\b"
+    },
+    "builtin": {
+      "name": "support.function.builtin.kuntur",
+      "match": "\\b(?:redondear|aleatorio|longitud|rikuchiy|mostrar|agregar|quitar|claves|numero|tiene|texto|tapuy|tipo|raiz|leer)\\b(?=\\s*\\()"
+    },
+    "type": {
+      "patterns": [
+        {
+          "match": "\\b(lista|diccionario)\\s+(de)\\b",
+          "captures": {
+            "1": {
+              "name": "support.type.kuntur"
+            },
+            "2": {
+              "name": "support.type.kuntur"
+            }
+          }
+        },
+        {
+          "name": "support.type.kuntur",
+          "match": "\\b(?:diccionario|decimal|entero|logico|lógico|texto|lista)\\b"
+        }
+      ]
+    },
+    "call": {
+      "name": "entity.name.function.kuntur",
+      "match": "[\\p{L}_](?:[\\p{L}\\p{N}_]|['’](?=\\p{L}))*(?=\\s*\\()"
+    },
+    "operator": {
+      "name": "keyword.operator.kuntur",
+      "match": "==|!=|<=|>=|[+\\-*/%=<>]"
+    }
+  }
+}

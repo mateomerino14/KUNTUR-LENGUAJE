@@ -4,3 +4,6 @@ playground/dist
 coverage
 .env
 .DS_Store
+vscode/dist
+*.vsix
+.vscode-test
