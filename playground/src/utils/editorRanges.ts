@@ -8,7 +8,7 @@ export interface SourceRange {
 const tokenPattern = /"(?:[^"\\\n]|\\.)*"?|[\p{L}\p{N}_.]+|[=!<>]=|\S/u;
 
 // Convierte una línea y columna, contadas desde 1, en una posición dentro del documento
-export const offsetOf = (doc: Text, line: number, column: number): number => {
+const offsetOf = (doc: Text, line: number, column: number): number => {
   const safeLine = Math.min(Math.max(line, 1), doc.lines);
   const lineInfo = doc.line(safeLine);
   return Math.min(lineInfo.from + Math.max(column - 1, 0), lineInfo.to);
