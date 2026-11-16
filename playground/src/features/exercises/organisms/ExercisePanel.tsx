@@ -39,7 +39,8 @@ const styles = {
   successText: 'text-[17px] font-bold text-teal',
 };
 
-const levelLabel = (exercise: Exercise) => EXERCISE_LEVELS.find((level) => level.id === exercise.level)?.label ?? '';
+// Nombre del nivel del ejercicio, como Fácil o Desafío
+const levelLabel = (exercise: Exercise): string => EXERCISE_LEVELS.find((level) => level.id === exercise.level)?.label ?? '';
 
 export const ExercisePanel = ({exercise, solved, grade, gradeIsStale, nextExercise, onCheck, onRestart, onNext, onSelectPosition}: ExercisePanelProps) => {
   const examples = exercise.tests.filter((test) => test.visible);
