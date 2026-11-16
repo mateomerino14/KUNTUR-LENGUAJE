@@ -6,7 +6,7 @@ on:
 
 jobs:
   pruebas:
-    name: Lint, tipos, pruebas y playground
+    name: Lint, tipos, pruebas, playground y extensión
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -19,3 +19,9 @@ jobs:
       - run: npm run typecheck
       - run: npm test -- --reporter=default --reporter=github-actions
       - run: npm run playground:build
+      - run: xvfb-run -a npm run vscode:test
+      - run: npm run vscode:package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kuntur-vscode
+          path: vscode/kuntur.vsix

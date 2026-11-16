@@ -1,0 +1,35 @@
+name: Publicar extensión de VS Code
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    name: Empaquetar y adjuntar a un release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run vscode:package
+      - name: Crear o actualizar el release de la versión
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./vscode/package.json').version")
+          tag="vscode-v$version"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" vscode/kuntur.vsix --clobber
+          else
+            gh release create "$tag" vscode/kuntur.vsix \
+              --title "Extensión de VS Code $version" \
+              --notes "Descarga kuntur.vsix e instálalo en VS Code desde Extensiones → ... → Instalar desde VSIX. Más detalles en docs/vscode.md."
+          fi
