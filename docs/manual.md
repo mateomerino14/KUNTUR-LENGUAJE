@@ -227,6 +227,10 @@ En **Ejercicios** hay 11 problemas en tres niveles: Fácil, Intermedio y Desafí
 
 Tu programa se prueba con los ejemplos y con otros casos ocultos. Si un caso falla, ves lo que se esperaba junto a lo que mostró tu programa, con la primera línea distinta marcada.
 
+![Ejercicio con un caso que no coincide](manual/ejercicio_fallido.png)
+
+Cuando todos los casos pasan, aparece **¡Resuelto!** y el botón para ir al siguiente ejercicio.
+
 ![Ejercicio resuelto](manual/ejercicio_resuelto.png)
 
 Algunos consejos:
