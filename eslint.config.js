@@ -3,7 +3,7 @@ import stylistic from '@stylistic/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
-  {ignores: ['dist', 'node_modules', 'playground/dist']},
+  {ignores: ['dist', 'node_modules', 'playground/dist', 'vscode/dist', '.vscode-test']},
   ...tseslint.configs.recommended,
   {
     plugins: {'@stylistic': stylistic},
@@ -26,6 +26,11 @@ export default tseslint.config(
     files: ['playground/**/*.{ts,tsx}'],
     plugins: {'react-hooks': reactHooks},
     rules: reactHooks.configs.recommended.rules,
+  },
+  {
+    // Las pruebas de la extensión corren dentro de VS Code, que las carga como CommonJS
+    files: ['vscode/test/**/*.cjs'],
+    rules: {'@typescript-eslint/no-require-imports': 'off'},
   },
   {
     // En los componentes se admite el ternario solo para valores simples y clases, como indica reglas.md

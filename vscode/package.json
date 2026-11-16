@@ -1,0 +1,131 @@
+{
+  "name": "kuntur",
+  "displayName": "Kuntur",
+  "description": "Lenguaje de programación en español: colores, errores mientras escribes, ejecución y WebAssembly",
+  "version": "0.1.0",
+  "publisher": "mateomerino14",
+  "author": "Mateo Alejandro Merino Vidal",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mateomerino14/KUNTUR-LENGUAJE.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Education"
+  ],
+  "keywords": [
+    "kuntur",
+    "español",
+    "quechua",
+    "compilador",
+    "webassembly"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "kuntur",
+        "aliases": [
+          "Kuntur"
+        ],
+        "extensions": [
+          ".kun"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kuntur",
+        "scopeName": "source.kuntur",
+        "path": "./syntaxes/kuntur.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "kuntur",
+        "path": "./snippets/kuntur.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "kuntur.ejecutar",
+        "title": "Ejecutar archivo",
+        "category": "Kuntur",
+        "icon": "$(play)"
+      },
+      {
+        "command": "kuntur.verWebAssembly",
+        "title": "Ver el WebAssembly generado",
+        "category": "Kuntur"
+      },
+      {
+        "command": "kuntur.guardarWasm",
+        "title": "Guardar WebAssembly independiente (.wasm)",
+        "category": "Kuntur"
+      },
+      {
+        "command": "kuntur.traducir",
+        "title": "Traducir entre español y quechua",
+        "category": "Kuntur"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "kuntur.ejecutar",
+          "when": "editorLangId == kuntur"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "kuntur.ejecutar",
+          "when": "editorLangId == kuntur"
+        },
+        {
+          "command": "kuntur.verWebAssembly",
+          "when": "editorLangId == kuntur"
+        },
+        {
+          "command": "kuntur.guardarWasm",
+          "when": "editorLangId == kuntur"
+        },
+        {
+          "command": "kuntur.traducir",
+          "when": "editorLangId == kuntur"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "kuntur.ejecutar",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && editorLangId == kuntur"
+      }
+    ],
+    "configuration": {
+      "title": "Kuntur",
+      "properties": {
+        "kuntur.idioma": {
+          "type": "string",
+          "enum": [
+            "español",
+            "runasimi"
+          ],
+          "enumDescriptions": [
+            "Las palabras del lenguaje en español: si, mientras, mostrar...",
+            "Las palabras del lenguaje en quechua: sichus, kaykama, rikuchiy..."
+          ],
+          "default": "español",
+          "description": "Idioma en que están escritas las palabras del lenguaje."
+        }
+      }
+    }
+  }
+}

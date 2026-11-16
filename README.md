@@ -33,6 +33,8 @@ En el playground se escribe código en Kuntur y se ve qué hace cada etapa del c
 
 Los errores se subrayan mientras se escribe y los programas se comparten con un enlace.
 
+Para escribir Kuntur en VS Code está la [extensión](docs/vscode.md), con colores, errores mientras se escribe y ejecución con `Ctrl + Enter`.
+
 Con el selector **Runasimi**, las palabras del lenguaje se escriben en quechua: `sichus`, `kaykama`, `rikuchiy`... Ver el [modo quechua](docs/quechua.md).
 
 La sección **Ejercicios** propone 11 problemas en tres niveles, con corrección automática: cada solución se prueba con casos visibles y ocultos, y el progreso queda guardado en el navegador. Ver [cómo funcionan](docs/ejercicios.md).
@@ -110,6 +112,7 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 - [Compilación a WebAssembly](docs/webassembly.md)
 - [Ejercicios con corrección automática](docs/ejercicios.md)
 - [Modo quechua (runasimi)](docs/quechua.md)
+- [Extensión para VS Code](docs/vscode.md)
 - [Estándares de desarrollo](reglas.md)
 - [Programas de ejemplo](ejemplos/)
 
@@ -125,4 +128,4 @@ diagnostics.forEach((diagnostic) => console.error(formatDiagnostic(diagnostic, s
 | 6 | Ejercicios con corrección automática | Terminada |
 | 7 | `para cada`, diccionarios y registros | Terminada |
 | 8 | Modo quechua | Terminada |
-| 9 | Extensión para VS Code | Pendiente |
+| 9 | Extensión para VS Code | Terminada |

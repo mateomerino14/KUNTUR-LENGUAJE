@@ -1,0 +1,104 @@
+{
+  "si": {
+    "prefix": "si",
+    "body": [
+      "si ${1:condicion} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Condicional si"
+  },
+  "si sino": {
+    "prefix": "sisino",
+    "body": [
+      "si ${1:condicion} {",
+      "\t$2",
+      "}",
+      "sino {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Condicional con sino"
+  },
+  "mientras": {
+    "prefix": "mientras",
+    "body": [
+      "mientras ${1:condicion} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Ciclo mientras"
+  },
+  "para": {
+    "prefix": "para",
+    "body": [
+      "para ${1:i} desde ${2:1} hasta ${3:10} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Ciclo para con un rango"
+  },
+  "para cada": {
+    "prefix": "paracada",
+    "body": [
+      "para cada ${1:elemento} en ${2:lista} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Recorre una lista, un texto o un diccionario"
+  },
+  "funcion": {
+    "prefix": "funcion",
+    "body": [
+      "funcion ${1:nombre}(${2:parametro}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Declara una función"
+  },
+  "registro": {
+    "prefix": "registro",
+    "body": [
+      "registro ${1:Nombre} {",
+      "\t${2:campo}: ${3:texto}",
+      "}"
+    ],
+    "description": "Declara un registro con sus campos"
+  },
+  "sichus": {
+    "prefix": "sichus",
+    "body": [
+      "sichus ${1:condicion} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Condicional en quechua (si)"
+  },
+  "kaykama": {
+    "prefix": "kaykama",
+    "body": [
+      "kaykama ${1:condicion} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Ciclo en quechua (mientras)"
+  },
+  "sapanka": {
+    "prefix": "sapanka",
+    "body": [
+      "sapanka ${1:i} qallarispa ${2:1} kama ${3:10} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Ciclo en quechua (para)"
+  },
+  "ruray": {
+    "prefix": "ruray",
+    "body": [
+      "ruray ${1:sutin}(${2:parametro}) {",
+      "\t$0",
+      "}"
+    ],
+    "description": "Función en quechua"
+  }
+}

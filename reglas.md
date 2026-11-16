@@ -129,6 +129,26 @@ Los mensajes están pensados para quien aprende a programar:
 
 ---
 
+## EXTENSIÓN DE VS CODE
+
+La extensión (`vscode/`) usa el compilador de `src/` empaquetado con `esbuild`; no copia lógica del lenguaje.
+
+```
+vscode/
+├── src/extension.ts         Errores en el editor y comandos
+├── src/programTerminal.ts   Terminal propia que ejecuta el programa y responde a `leer`
+├── src/lineEditor.ts        Edición de la línea que se escribe en la terminal (sin dependencias de VS Code)
+├── src/ranges.ts            Rango que se subraya en cada error (sin dependencias de VS Code)
+├── syntaxes/                Gramática TextMate de colores
+├── snippets/                Fragmentos de código
+└── test/suite.cjs           Pruebas dentro de un VS Code real
+```
+
+- La lógica que no necesita VS Code va en archivos aparte, para probarla con Vitest en `tests/vscode`.
+- Cada palabra clave nueva del lenguaje se agrega también a la gramática; una prueba lo verifica.
+
+---
+
 ## PLAYGROUND
 
 El playground (`playground/`) es una aplicación de React con Vite, Tailwind y CodeMirror que usa el compilador directamente desde `src/`.
