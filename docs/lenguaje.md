@@ -1,6 +1,6 @@
 # Referencia del lenguaje Kuntur
 
-Kuntur es un lenguaje pequeño, con palabras clave en español. Esta referencia describe lo que funciona en la versión actual (fase 3: compilación a WebAssembly). Los programas se pueden interpretar o [compilar a WebAssembly](webassembly.md).
+Kuntur es un lenguaje pequeño, con palabras clave en español. Esta referencia describe todo lo que funciona en la versión actual. Los programas se pueden interpretar o [compilar a WebAssembly](webassembly.md), y las palabras del lenguaje también se pueden escribir [en quechua](quechua.md). Para una introducción paso a paso, ver el [manual de usuario](manual.md).
 
 ## Estructura de un programa
 
@@ -36,6 +36,8 @@ Los comentarios empiezan con `//` y llegan hasta el final de la línea.
 | lógico | `verdadero`, `falso` |
 | nulo | `nulo` |
 | lista | `[1, 2, 3]`, `["a", verdadero, [1]]` |
+| diccionario | `{"Ana": 20, "Luis": 18}` |
+| registro | `Alumno("Ana", 85)`, después de declarar `registro Alumno { ... }` |
 | función | toda función declarada con `funcion` |
 
 Los textos van entre comillas dobles y admiten `\n`, `\t`, `\"` y `\\`.
