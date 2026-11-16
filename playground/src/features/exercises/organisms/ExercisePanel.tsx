@@ -2,7 +2,7 @@ import {EXERCISE_LEVELS, type Exercise, type GradeResult, type Position} from '.
 import {Button} from '../../../components/ui/Button';
 import {DiagnosticItem} from '../../output/molecules/DiagnosticItem';
 import {IoBox} from '../molecules/IoBox';
-import {RichText} from '../molecules/RichText';
+import {RichText} from '../../../components/ui/RichText';
 import {TestResultItem} from '../molecules/TestResultItem';
 
 interface ExercisePanelProps {
