@@ -15,7 +15,7 @@ export enum Precedence {
   Call = 10,
 }
 
-export const infixPrecedences: ReadonlyMap<TokenType, Precedence> = new Map([
+const infixPrecedences: ReadonlyMap<TokenType, Precedence> = new Map([
   [TokenType.Equal, Precedence.Assignment],
   [TokenType.Or, Precedence.Or],
   [TokenType.And, Precedence.And],
