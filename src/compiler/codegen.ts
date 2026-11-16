@@ -77,8 +77,8 @@ interface FunctionState {
 
 export const mainFunctionName = 'principal';
 export const memoryExportName = 'memoria';
-export const wasiMainName = '_start';
-export const wasiMemoryName = 'memory';
+const wasiMainName = '_start';
+const wasiMemoryName = 'memory';
 
 const wasmPageSize = 65536;
 const stepsGlobalName = 'pasos';
