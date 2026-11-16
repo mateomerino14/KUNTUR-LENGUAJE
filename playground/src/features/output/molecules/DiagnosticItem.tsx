@@ -1,4 +1,5 @@
 import type {Diagnostic, Position} from '../../../../../src/index.js';
+import {RichText} from '../../../components/ui/RichText';
 import {STAGE_LABELS} from '../../../constants/stageLabels';
 
 interface DiagnosticItemProps {
@@ -26,7 +27,7 @@ export const DiagnosticItem = ({diagnostic, onSelectPosition}: DiagnosticItemPro
           Línea {line}, columna {column}
         </button>
       </div>
-      <p className={styles.message}>{diagnostic.message}</p>
+      <p className={styles.message}><RichText text={diagnostic.message} /></p>
     </li>
   );
 };
