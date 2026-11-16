@@ -2,7 +2,7 @@ import {EXERCISE_LEVELS, type Exercise, type GradeResult, type Position} from '.
 import {Button} from '../../../components/ui/Button';
 import {DiagnosticItem} from '../../output/molecules/DiagnosticItem';
 import {IoBox} from '../molecules/IoBox';
-import {RichText} from '../molecules/RichText';
+import {RichText} from '../../../components/ui/RichText';
 import {TestResultItem} from '../molecules/TestResultItem';
 
 interface ExercisePanelProps {
@@ -39,7 +39,8 @@ const styles = {
   successText: 'text-[17px] font-bold text-teal',
 };
 
-const levelLabel = (exercise: Exercise) => EXERCISE_LEVELS.find((level) => level.id === exercise.level)?.label ?? '';
+// Nombre del nivel del ejercicio, como Fácil o Desafío
+const levelLabel = (exercise: Exercise): string => EXERCISE_LEVELS.find((level) => level.id === exercise.level)?.label ?? '';
 
 export const ExercisePanel = ({exercise, solved, grade, gradeIsStale, nextExercise, onCheck, onRestart, onNext, onSelectPosition}: ExercisePanelProps) => {
   const examples = exercise.tests.filter((test) => test.visible);

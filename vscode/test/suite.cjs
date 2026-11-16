@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const vscode = require('vscode');
 
+// Repite la condición hasta que se cumpla o se acabe el tiempo de espera
 const waitFor = async (condition, message) => {
   for (let attempt = 0; attempt < 100; attempt++) {
     const value = condition();
@@ -16,6 +17,7 @@ const waitFor = async (condition, message) => {
   throw new Error(`Se esperaba: ${message}`);
 };
 
+// Guarda el programa en una carpeta temporal y lo abre en el editor
 const openProgram = async (name, source) => {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'kuntur-')), name);
   fs.writeFileSync(file, source);

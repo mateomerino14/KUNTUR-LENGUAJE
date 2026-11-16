@@ -131,7 +131,9 @@ const failFunction = (name: string, params: [string, ValueType][], pieces: Piece
 
 type Localize = (message: string) => string;
 
+// Parte de un mensaje que se completa con un número al fallar
 const numberArg = (arg: string): Piece => ({arg, kind: 'number'});
+// Parte de un mensaje que se completa con un texto al fallar
 const textArg = (arg: string): Piece => ({arg, kind: 'text'});
 
 // Funciones que informan cada error de ejecución, armadas con los mismos mensajes del intérprete
