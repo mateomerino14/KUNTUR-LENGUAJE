@@ -20,7 +20,7 @@ const styles = {
   page: 'min-h-screen flex flex-col lg:h-screen',
   progress: 'text-[15px] text-ink-muted',
   shortcut: 'font-normal text-[13px] opacity-80',
-  main: 'flex-1 min-h-0 grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
+  main: 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]',
   editor: 'h-[55vh] lg:h-auto min-h-0 border-b lg:border-b-0 lg:border-r border-line bg-paper',
   panel: 'flex flex-col min-h-[50vh] lg:min-h-0 overflow-auto',
 };
