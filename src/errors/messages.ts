@@ -11,7 +11,7 @@ const readOnlyMessages: Readonly<Record<ReadOnlyKind, (name: string) => string>>
 export const readOnlyMessage = (kind: ReadOnlyKind, name: string): string => readOnlyMessages[kind](name);
 
 // Arma "1 valor" o "N valores" según la cantidad
-export const countValues = (count: number): string => {
+const countValues = (count: number): string => {
   if (count === 1) {
     return '1 valor';
   }

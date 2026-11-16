@@ -12,14 +12,14 @@ export interface SharedProgram {
 }
 
 // Convierte el código en texto seguro para la dirección, pasando por UTF-8 para conservar tildes y eñes
-export const encodeSource = (source: string): string => {
+const encodeSource = (source: string): string => {
   const bytes = new TextEncoder().encode(source);
   const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
 
 // Recupera el código guardado en la dirección, o null si no hay o no se puede leer
-export const decodeSource = (encoded: string): string | null => {
+const decodeSource = (encoded: string): string | null => {
   try {
     const binary = atob(encoded.replace(/-/g, '+').replace(/_/g, '/'));
     const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
